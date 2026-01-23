@@ -16,7 +16,10 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
-def execute_report(data_invoices: Optional[pd.DataFrame] = None):
+def execute_report(
+    data_invoices: Optional[pd.DataFrame] = None,
+    data_ventas: Optional[pd.DataFrame] = None
+):
     TENANT_ID = os.getenv("TENANT_ID")
     CLIENT_ID = os.getenv("CLIENT_ID")
     CLIENT_SECRET = os.getenv("CLIENT_SECRET")
@@ -133,9 +136,10 @@ def execute_report(data_invoices: Optional[pd.DataFrame] = None):
     for _, row in c.iterrows():
         num_deal[row['Correlativo_OPCI']] = row['Numero_Deal']
 
-    conn = pymssql.connect(server='192.168.10.33', user='SA',
-                           password='%C0rsus77%', database='ERP')
-    f = pd.read_sql("select v.NroSre, v.NroDoc, v.FecMov, v.CamMda, v.Cd_Mda, v.ValorNeto, v.CA10, v.Cd_TD, v.DR_NSre,v.DR_NDoc, v.IB_Anulado, v.Cliente  from venta v join Cliente2 c on v.Cd_Clt = c.Cd_Clt where v.FecMov >= '2025-01-01' and v.ValorNeto is not NULL and v.IB_Anulado = 0 and c.Cd_TDI != '01' order by v.FecMov ASC", conn)
+    # conn = pymssql.connect(server='192.168.10.33', user='SA',
+    #                        password='%C0rsus77%', database='ERP')
+    # f = pd.read_sql("select v.NroSre, v.NroDoc, v.FecMov, v.CamMda, v.Cd_Mda, v.ValorNeto, v.CA10, v.Cd_TD, v.DR_NSre,v.DR_NDoc, v.IB_Anulado, v.Cliente  from venta v join Cliente2 c on v.Cd_Clt = c.Cd_Clt where v.FecMov >= '2025-01-01' and v.ValorNeto is not NULL and v.IB_Anulado = 0 and c.Cd_TDI != '01' order by v.FecMov ASC", conn)
+    f = data_ventas
 
     bt['Factura #'] = bt['Factura #'].str.split(' ').str[0]
     un = {}
@@ -170,6 +174,7 @@ def execute_report(data_invoices: Optional[pd.DataFrame] = None):
     df = pd.merge(f, b, how='left', on='Num_Factura')
     df = pd.merge(df, a, how='left', on='Correlativo_OPCI')
     df['UN'] = df['Num_Factura'].map(un)
+    df['FecMov'] = pd.to_datetime(df['FecMov'], errors='coerce')
     df['AÑO'] = df['FecMov'].dt.year
     df['MES'] = df['FecMov'].dt.month
     df['Subject'] = '-'

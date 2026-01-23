@@ -1,6 +1,6 @@
 from io import StringIO
 import pandas as pd
-from fastapi import APIRouter, HTTPException, UploadFile, File, Query
+from fastapi import APIRouter, HTTPException, UploadFile, File, Query, Form
 from typing import Optional
 from models.invoice import FacturaUpdate
 from services import invoice_service
@@ -78,24 +78,30 @@ def export_report():
 
 
 @router.post("/execute_report")
-async def get_facturas_filtros(file: Optional[UploadFile] = File(None)):
+async def get_facturas_filtros(
+    file: Optional[UploadFile] = File(None),
+    ventas_data: Optional[str] = Form(None)
+):
     try:
+        df_invoices = None
         if file:
-            if not file.filename.endswith('.csv'):
-                raise HTTPException(
-                    status_code=400,
-                    detail="El archivo debe ser formato CSV"
-                )
             contents = await file.read()
-            df = pd.read_csv(StringIO(contents.decode('utf-8')), sep=';')
-            report_service.execute_report(data_invoices=df)
+            df_invoices = pd.read_csv(
+                StringIO(contents.decode('utf-8')),
+                sep=';'
+            )
 
-            return {
-                'message': 'Actualización exitosa con archivo'
-            }
-        else:
-            report_service.execute_report()
-            return {'message': 'Actualización exitosa sin archivo'}
+        df_ventas = None
+        if ventas_data:
+            import json
+            ventas_json = json.loads(ventas_data)
+            df_ventas = pd.DataFrame(ventas_json)
+
+        report_service.execute_report(
+            data_invoices=df_invoices,
+            data_ventas=df_ventas
+        )
+        return {'message': 'Actualización exitosa sin archivo'}
 
     except Exception as e:
         print(f"Error en get_facturas_filtros: {str(e)}")
