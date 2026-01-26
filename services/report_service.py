@@ -2,11 +2,8 @@ import pandas as pd
 from msal import ConfidentialClientApplication
 import requests
 import os
-import pymssql
 from openpyxl import load_workbook
-from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
-from openpyxl.formatting.rule import CellIsRule
-from openpyxl.styles.differential import DifferentialStyle
+from openpyxl.styles import Font, PatternFill
 from openpyxl.formatting.rule import FormulaRule
 import numpy as np
 import unicodedata
@@ -136,9 +133,6 @@ def execute_report(
     for _, row in c.iterrows():
         num_deal[row['Correlativo_OPCI']] = row['Numero_Deal']
 
-    # conn = pymssql.connect(server='192.168.10.33', user='SA',
-    #                        password='%C0rsus77%', database='ERP')
-    # f = pd.read_sql("select v.NroSre, v.NroDoc, v.FecMov, v.CamMda, v.Cd_Mda, v.ValorNeto, v.CA10, v.Cd_TD, v.DR_NSre,v.DR_NDoc, v.IB_Anulado, v.Cliente  from venta v join Cliente2 c on v.Cd_Clt = c.Cd_Clt where v.FecMov >= '2025-01-01' and v.ValorNeto is not NULL and v.IB_Anulado = 0 and c.Cd_TDI != '01' order by v.FecMov ASC", conn)
     f = data_ventas
 
     bt['Factura #'] = bt['Factura #'].str.split(' ').str[0]
@@ -602,6 +596,10 @@ def execute_report(
 
     wb.save(nombre_archivo)
 
+    # ============================================================================
+    # PARTE ACTUALIZADA: CÁLCULO DE COMISIONES CON NUEVO MODELO
+    # ============================================================================
+
     df = pd.read_excel('reporte.xlsx')
     df = df[df['Responsable 1'].notna()]
     endress = df[df['Producto CRM'].str.contains('Endress', na=False)]
@@ -663,22 +661,85 @@ def execute_report(
     df['Comisiona'] = np.where(df['Producto CRM'].str.contains(
         'Endress'), df['Comisiona'], True)
     df['Comisiona'] = df['Comisiona'].fillna(True)
-    df['Comisión'] = np.where(df['Comisiona'], df['Monto Actualizado']*0.01, 0)
+
+    # Calcular comisión total base (1%)
+    df['Comisión Total'] = np.where(
+        df['Comisiona'], df['Monto Actualizado'] * 0.01, 0)
+
+    # Calcular porcentajes individuales
     df['Porcentaje 1'] = 0.7
-    df['Porcentaje 2'] = np.where((df['Responsable 2'].str.contains(
-        'Paolo', na=False) & (df['Producto CRM'].str.contains('Proy', na=False))), 0.5, 0.3)
-    df['Comisión 1'] = df['Comisión'] * df['Porcentaje 1']
-    df['Comisión 2'] = df['Comisión'] * df['Porcentaje 2']
-    df['Producto'] = np.where(df['Producto CRM'].str.contains(
-        'Endress', na=False), 'Endress', df['Producto CRM'])
+    df['Porcentaje 2'] = np.where(
+        (df['Responsable 2'].str.contains('Paolo', na=False) &
+         (df['Producto CRM'].str.contains('Proy', na=False))),
+        0.5,
+        0.3
+    )
+
+    # Calcular comisiones individuales (temporal para el reporte Excel)
+    df['Comisión 1'] = df['Comisión Total'] * df['Porcentaje 1']
+    df['Comisión 2'] = df['Comisión Total'] * df['Porcentaje 2']
+
+    # Determinar producto simplificado
+    df['Producto'] = np.where(
+        df['Producto CRM'].str.contains('Endress', na=False),
+        'Endress',
+        df['Producto CRM']
+    )
+
     df.drop(columns=['MES_RESPONSABLE'], inplace=True)
+
+    # ============================================================================
+    # CREAR ARRAY DE RESPONSABLES (NUEVO MODELO) Y CONSOLIDAR DUPLICADOS
+    # ============================================================================
+
+    def crear_array_responsables(row):
+        """
+        Crea el array de responsables consolidando duplicados
+        """
+        responsables_dict = {}
+
+        # Responsable 1
+        if pd.notna(row['Responsable 1']) and row['Responsable 1'].strip() != '':
+            nombre_r1 = row['Responsable 1'].strip()
+            nombre_key_r1 = nombre_r1.lower()
+
+            responsables_dict[nombre_key_r1] = {
+                'nombre': nombre_r1,
+                'porcentaje': row['Porcentaje 1'],
+                'comision': row['Comisión 1']
+            }
+
+        # Responsable 2
+        if pd.notna(row['Responsable 2']) and row['Responsable 2'].strip() != '':
+            nombre_r2 = row['Responsable 2'].strip()
+            nombre_key_r2 = nombre_r2.lower()
+
+            if nombre_key_r2 in responsables_dict:
+                # Es el mismo responsable, consolidar
+                responsables_dict[nombre_key_r2]['porcentaje'] += row['Porcentaje 2']
+                responsables_dict[nombre_key_r2]['comision'] += row['Comisión 2']
+            else:
+                # Es diferente responsable
+                responsables_dict[nombre_key_r2] = {
+                    'nombre': nombre_r2,
+                    'porcentaje': row['Porcentaje 2'],
+                    'comision': row['Comisión 2']
+                }
+
+        # Convertir dict a lista
+        return list(responsables_dict.values())
+
+    # Aplicar la función para crear el array de responsables
+    df['responsables'] = df.apply(crear_array_responsables, axis=1)
+
+    # ============================================================================
+    # MAPEO DE COLUMNAS PARA MONGODB
+    # ============================================================================
 
     COLUMN_MAP = {
         "OK": "ok",
         "AÑO": "anio",
         "MES": "mes",
-        "Responsable 1": "responsable_1",
-        "Responsable 2": "responsable_2",
         "Unidad de Negocio": "unidad_negocio",
         "Fecha": "fecha",
         "Estado": "estado",
@@ -704,14 +765,40 @@ def execute_report(
         "Umbral": "umbral",
         "Producto": "producto",
         "Comisiona": "comisiona",
-        "Comisión": "comision",
-        "Porcentaje 1": "porcentaje_1",
-        "Porcentaje 2": "porcentaje_2",
-        "Comisión 1": "comision_1",
-        "Comisión 2": "comision_2"
+        "Comisión Total": "comision_total",
+        "responsables": "responsables"  # Nuevo campo
     }
 
+    # Renombrar columnas
     df = df.rename(columns=COLUMN_MAP)
+
+    # Seleccionar solo las columnas que vamos a insertar
+    columnas_a_insertar = [
+        "ok", "anio", "mes", "unidad_negocio", "fecha", "estado", "numero",
+        "monto_total", "producto_crm", "utilidad_bruta", "nombre_empresa",
+        "subject", "codigos", "cotizacion_num", "origen_deal",
+        "tipo_cambio_factura", "monto_actualizado", "diferencia", "notas",
+        "observaciones", "periodo", "estado_pago_vendedor", "lider_1",
+        "lider_2", "estado_pago_lideres", "umbral", "producto", "comisiona",
+        "comision_total", "responsables"
+    ]
+
+    df = df[columnas_a_insertar]
+
+    # Convertir a registros
     records = df.to_dict(orient="records")
+
+    # Limpiar e insertar
     database.invoices_collection.delete_many({})
     database.invoices_collection.insert_many(records)
+
+    print(f"\n{'=' * 80}")
+    print(f"✅ DATOS CARGADOS A MONGODB")
+    print(f"{'=' * 80}")
+    print(f"Total de facturas insertadas: {len(records)}")
+
+    # Estadísticas de consolidación
+    facturas_consolidadas = sum(1 for r in records if len(r['responsables']) == 1 and
+                                r['responsables'][0]['porcentaje'] == 1.0)
+    print(f"Facturas con responsables consolidados: {facturas_consolidadas}")
+    print(f"{'=' * 80}\n")

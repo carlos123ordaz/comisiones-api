@@ -36,10 +36,6 @@ def update_vendedor(vendedor_id: str, vendedor: VendedorUpdate):
     try:
         vendedor_actualizado = vendedor_service.update_vendedor(
             vendedor_id, vendedor)
-
-        if vendedor.meta_mensual is not None or vendedor.porcentaje_umbral is not None:
-            invoice_service.recalcular_comisiones()
-
         return vendedor_actualizado
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))

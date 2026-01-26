@@ -130,7 +130,16 @@ async def get_facturas_by_user(name_user: str = Query(..., description="Nombre d
             )
 
         wb_nuevo = load_workbook('reporte.xlsx')
-        ws_nuevo = wb_nuevo.active
+
+        # Obtener la primera hoja
+        primera_hoja = wb_nuevo.worksheets[0]
+
+        # Eliminar todas las hojas excepto la primera
+        for sheet_name in wb_nuevo.sheetnames[1:]:
+            wb_nuevo.remove(wb_nuevo[sheet_name])
+
+        # Trabajar con la primera hoja
+        ws_nuevo = primera_hoja
         indices_filtrados = df_filtrado.index.tolist()
         indices_a_mantener = [i + 2 for i in indices_filtrados]
         indices_a_mantener.insert(0, 1)
