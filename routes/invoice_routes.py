@@ -10,7 +10,8 @@ from fastapi.responses import FileResponse
 import os
 import tempfile
 from openpyxl import load_workbook
-
+from fastapi.responses import StreamingResponse
+from io import BytesIO
 router = APIRouter(prefix="/invoices", tags=["invoices"])
 
 
@@ -58,23 +59,38 @@ def get_facturas_filtros():
 def export_report():
     try:
         file_path = 'reporte.xlsx'
+
         if not os.path.exists(file_path):
             raise HTTPException(
                 status_code=404, detail="Archivo no encontrado")
 
-        return FileResponse(
-            path=file_path,
-            filename="reporte_invoices.xlsx",
-            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        wb = load_workbook(file_path)
+        rename_map = {
+            "Hoja1": "Resumen",
+            "Hoja2": "Monto ERP = Excel",
+            "Hoja3": "Responsable B24 vs Excel",
+            "Hoja4": "OPCI Responsable Único",
+            "Hoja5": "Servicios Responsable Fredy",
+            "Hoja6": "Nota Crédito Compensada",
+        }
+        for old_name, new_name in rename_map.items():
+            if old_name in wb.sheetnames:
+                wb[old_name].title = new_name
+
+        buffer = BytesIO()
+        wb.save(buffer)
+        buffer.seek(0)
+
+        return StreamingResponse(
+            buffer,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={
+                "Content-Disposition": "attachment; filename=reporte_invoices.xlsx"}
         )
     except Exception as e:
         print(f"Error en export_report: {str(e)}")
-        import traceback
-        traceback.print_exc()
         raise HTTPException(
-            status_code=500,
-            detail=f"Error al exportar archivo: {str(e)}"
-        )
+            status_code=500, detail=f"Error al exportar archivo: {str(e)}")
 
 
 @router.post("/execute_report")
