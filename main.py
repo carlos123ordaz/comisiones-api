@@ -31,7 +31,7 @@ def read_root():
     """Endpoint raíz"""
     return {
         "message": "API de Dashboard con MongoDB funcionando correctamente",
-        "version": "2.0",
+        "version": "2.1",
         "docs": "/docs"
     }
 
