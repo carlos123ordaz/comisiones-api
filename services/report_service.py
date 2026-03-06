@@ -309,7 +309,13 @@ def execute_report(
             conflictos.append(grupo[['OPCI', 'Nombre', 'Factura #', 'Fecha de la factura',
                               'Etapa', 'Responsable Deal - Principal', 'Responsable Deal - Secundario']])
 
-    df_conflictos = pd.concat(conflictos, ignore_index=True)
+    if conflictos:
+        df_conflictos = pd.concat(conflictos, ignore_index=True)
+    else:
+        df_conflictos = pd.DataFrame(columns=[
+            'OPCI', 'Nombre', 'Factura #', 'Fecha de la factura',
+            'Etapa', 'Responsable Deal - Principal', 'Responsable Deal - Secundario'
+        ])
 
     df_servicios = df[df['Producto CRM'].str.contains('Serv-', na=False)]
     df_servicios = df_servicios[['AÑO', 'MES', 'Fecha', 'Número', 'Producto CRM',
