@@ -117,7 +117,13 @@ async def get_facturas_filtros(
             data_invoices=df_invoices,
             data_ventas=df_ventas
         )
-        return {'message': 'Actualización exitosa sin archivo'}
+        if file and ventas_data:
+            msg = 'Actualización exitosa con archivo CSV y datos de BD'
+        elif file:
+            msg = 'Actualización exitosa con archivo CSV'
+        else:
+            msg = 'Actualización exitosa con datos de BD local'
+        return {'message': msg}
 
     except Exception as e:
         print(f"Error en get_facturas_filtros: {str(e)}")
