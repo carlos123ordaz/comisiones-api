@@ -268,6 +268,9 @@ def execute_report(
     df['Proviene EPC/OEM/Canal Deal?'] = np.where(
         df['Responsable 1'] == df['Responsable 2'], 'No', 'Si')
     df['UBrutaCoti'] = df['UBrutaCoti'].fillna(0)
+    es_servicio = df['Producto_CRM'].str.contains('Serv-', na=False)
+    df['UBrutaCoti'] = np.where(
+        es_servicio & (df['UBrutaCoti'] < 0.22), 0.22, df['UBrutaCoti'])
     df['UBrutaCoti'] = np.where(
         df['UBrutaCoti'] >= 0.22, 0.22, df['UBrutaCoti'])
     df['Monto Actualizado'] = np.where(
@@ -391,7 +394,7 @@ def execute_report(
 
     for i in range(2, num_filas + 2):
         cell = ws[f"L{i}"]
-        if cell.value >= 0.22:
+        if (cell.value or 0) >= 0.22:
             cell.number_format = '">"0%'
         else:
             cell.number_format = "0.00%"
