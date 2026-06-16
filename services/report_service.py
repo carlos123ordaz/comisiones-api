@@ -171,6 +171,7 @@ def execute_report(
     df['FecMov'] = pd.to_datetime(df['FecMov'], errors='coerce')
     df['AÑO'] = df['FecMov'].dt.year
     df['MES'] = df['FecMov'].dt.month
+    df = df[df['AÑO'] >= 2026]
     df['Subject'] = '-'
     df['Codigos'] = '-'
     df['Diferencia'] = '-'
