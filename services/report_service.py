@@ -165,6 +165,8 @@ def execute_report(
         obj_r1[row['OPCI']] = row['Responsable Deal - Principal']
         obj_r2[row['OPCI']] = row['Responsable Deal - Secundario']
 
+    nc1 = f[f['Cd_TD'] == '07'].copy()
+    b = b[~b['Num_Factura'].isin(nc1['Num_Factura'])]
     df = pd.merge(f, b, how='left', on='Num_Factura')
     df = pd.merge(df, a, how='left', on='Correlativo_OPCI')
     df['UN'] = df['Num_Factura'].map(un)
