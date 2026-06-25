@@ -371,6 +371,7 @@ def update_factura(factura_id: str, factura_update: FacturaUpdate) -> dict:
             update_data['responsables'] = responsables
 
     if update_data:
+        update_data['manually_edited'] = True
         invoices_collection.update_one(
             {'_id': ObjectId(factura_id)},
             {'$set': update_data}

@@ -1059,9 +1059,96 @@ def execute_report(
     # Convertir a registros
     records = df.to_dict(orient="records")
 
+    # Preservar responsables editados manualmente antes de borrar
+    facturas_manuales = {
+        doc['numero']: [
+            {'nombre': r['nombre'], 'porcentaje': r['porcentaje']}
+            for r in doc.get('responsables', [])
+        ]
+        for doc in database.invoices_collection.find(
+            {'manually_edited': True},
+            {'numero': 1, 'responsables': 1}
+        )
+    }
+
     # Limpiar e insertar
     database.invoices_collection.delete_many({})
     database.invoices_collection.insert_many(records)
+
+    # Restaurar responsables editados manualmente, recalculando comisiones con los nuevos montos
+    if facturas_manuales:
+        numeros_editados = list(facturas_manuales.keys())
+        for doc in database.invoices_collection.find(
+            {'numero': {'$in': numeros_editados}},
+            {'numero': 1, 'comision_total': 1, 'comisiona': 1}
+        ):
+            numero = doc['numero']
+            comision_total = doc.get('comision_total', 0)
+            comisiona = doc.get('comisiona', True)
+
+            nuevos_responsables = []
+            for r in facturas_manuales[numero]:
+                nuevos_responsables.append({
+                    'nombre': r['nombre'],
+                    'porcentaje': r['porcentaje'],
+                    'comision': comision_total * r['porcentaje'] if comisiona else 0
+                })
+
+            database.invoices_collection.update_one(
+                {'numero': numero},
+                {'$set': {'responsables': nuevos_responsables, 'manually_edited': True}}
+            )
+
+    # Actualizar reporte.xlsx con los cambios manuales restaurados
+    if facturas_manuales:
+        wb_excel = load_workbook(nombre_archivo)
+        ws_hoja1 = wb_excel['Hoja1']
+
+        # Construir mapa Número → fila Excel (col I = 9, datos desde fila 2)
+        numero_a_fila = {}
+        for row_idx in range(2, ws_hoja1.max_row + 1):
+            val = ws_hoja1.cell(row=row_idx, column=9).value
+            if val is not None:
+                numero_a_fila[str(val)] = row_idx
+
+        font_celda = Font(name='Tahoma', size=9)
+
+        for doc in database.invoices_collection.find(
+            {'numero': {'$in': list(facturas_manuales.keys())}},
+            {'numero': 1, 'responsables': 1}
+        ):
+            numero = doc['numero']
+            fila = numero_a_fila.get(str(numero))
+            if fila is None:
+                continue
+
+            responsables = doc.get('responsables', [])
+
+            # Responsable 1 (col D=4)
+            r1_nombre = responsables[0]['nombre'] if len(responsables) >= 1 else None
+            r1_comision = responsables[0]['comision'] if len(responsables) >= 1 else 0
+            c = ws_hoja1.cell(row=fila, column=4)
+            c.value = r1_nombre
+            c.font = font_celda
+
+            # Responsable 2 (col E=5)
+            r2_nombre = responsables[1]['nombre'] if len(responsables) >= 2 else None
+            r2_comision = responsables[1]['comision'] if len(responsables) >= 2 else 0
+            c = ws_hoja1.cell(row=fila, column=5)
+            c.value = r2_nombre
+            c.font = font_celda
+
+            # Reemplazar fórmulas de Comisión 1 (AD) y Comisión 2 (AE) con valores reales
+            c_ad = ws_hoja1.cell(row=fila, column=30)
+            c_ad.value = r1_comision
+            c_ad.font = font_celda
+
+            c_ae = ws_hoja1.cell(row=fila, column=31)
+            c_ae.value = r2_comision
+            c_ae.font = font_celda
+
+        wb_excel.save(nombre_archivo)
+        print(f"✅ reporte.xlsx actualizado con {len(facturas_manuales)} factura(s) editada(s) manualmente")
 
     print(f"\n{'=' * 80}")
     print(f"✅ DATOS CARGADOS A MONGODB")
