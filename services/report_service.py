@@ -29,35 +29,11 @@ def execute_report(
     result = app.acquire_token_for_client(
         scopes=["https://graph.microsoft.com/.default"])
 
-    token = result["access_token"]
-    headers = {'Authorization': f'Bearer {token}'}
-
-    site_url = "https://graph.microsoft.com/v1.0/sites/corsusaadmin.sharepoint.com:/sites/logistica"
-    site_response = requests.get(site_url, headers=headers)
-    site_id = site_response.json()['id']
-
-    drives_url = f"https://graph.microsoft.com/v1.0/sites/{site_id}/drives"
-    drives_response = requests.get(drives_url, headers=headers)
-    drives = drives_response.json()['value']
-
-    document_drive = None
-    for d in drives:
-        if 'Documentos' in d['name'] or 'Documents' in d['name']:
-            document_drive = d
-            break
-
-    if not document_drive:
-        document_drive = drives[0]
-
-    drive_id = document_drive['id']
-
-    app = ConfidentialClientApplication(
-        CLIENT_ID,
-        authority=f"https://login.microsoftonline.com/{TENANT_ID}",
-        client_credential=CLIENT_SECRET
-    )
-    result = app.acquire_token_for_client(
-        scopes=["https://graph.microsoft.com/.default"])
+    if "access_token" not in result:
+        raise ValueError(
+            f"Error de autenticación con Microsoft 365: {result.get('error_description', result.get('error', 'Token no obtenido'))}. "
+            "Renueva el CLIENT_SECRET en el portal de Azure AD."
+        )
 
     token = result["access_token"]
     headers = {'Authorization': f'Bearer {token}'}
@@ -153,7 +129,7 @@ def execute_report(
     one = pd.merge(f, grupo, on='Num_Factura', how='inner')
     one = one[['Num_Factura', 'ValorNeto', 'Monto',
                'Status_Factura', 'CamMda', 'T/C_USD-Sol']]
-    one['Monto (-)'] = round(abs(one['ValorNeto'] - one['Monto']), 2)
+    one['Monto (-)'] = round(abs(abs(one['ValorNeto']) - abs(one['Monto'])), 2)
     one['T/C (-)'] = round(abs(one['CamMda'] - one['T/C_USD-Sol']), 2)
     one = one.rename(columns={'Num_Factura': 'Número', 'ValorNeto': 'Monto ERP',
                      'Monto': 'Monto Excel', 'CamMda': 'T/C ERP', 'T/C_USD-Sol': 'T/C Excel'})
@@ -173,7 +149,6 @@ def execute_report(
     df['FecMov'] = pd.to_datetime(df['FecMov'], errors='coerce')
     df['AÑO'] = df['FecMov'].dt.year
     df['MES'] = df['FecMov'].dt.month
-    df = df[df['AÑO'] >= 2026]
     df['Subject'] = '-'
     df['Codigos'] = '-'
     df['Diferencia'] = '-'
@@ -350,6 +325,43 @@ def execute_report(
             'Nombre Empresa', 'Subject', 'Codigos', 'Cotizacion #', 'Proviene EPC/OEM/Canal Deal?', 'T/C de la Factura', 'Monto Actualizado', 'Diferencia', 'Notas',
              'Observaciones', 'Periodo', 'EstadoPago-Vendedor', 'Lider 1', 'Lider 2', 'EstadoPago-Lideres', 'Umbral']]
 
+    # Hoja Datos Incompletos: filas donde campos clave son nulos o guion
+    _cols_validar = ['Responsable 1', 'Responsable 2', 'UBruta', 'Cotizacion #', 'Producto CRM']
+    def _campo_incompleto(val):
+        if val is None:
+            return True
+        s = str(val).strip()
+        return s == '' or s == '-' or s.lower() == 'nan'
+
+    _mask = df[_cols_validar].apply(lambda col: col.map(_campo_incompleto)).any(axis=1)
+    df_incompletos = df[_mask].drop(columns=['Unidad de Negocio']).copy()
+    df_incompletos['Campos Incompletos'] = df[_cols_validar].apply(
+        lambda col: col.map(_campo_incompleto)
+    ).apply(lambda row: ', '.join(_cols_validar[i] for i, v in enumerate(row) if v), axis=1)
+
+    # Resumen de validaciones
+    _n_incompletos = len(df_incompletos)
+    _n_monto_erp = len(one[(one['Monto (-)'] > 0) | (one['T/C (-)'] > 0)])
+    _n_responsable = len(df_c1[
+        (df_c1['Responsable 1 B.'] != df_c1['Responsable 1 E.']) |
+        (df_c1['Responsable 2 B.'] != df_c1['Responsable 2 E.'])
+    ])
+    _n_opci = len(df_conflictos)
+    _n_fredy = len(df_servicios[
+        (df_servicios['Responsable 1'] != 'Fredy Huaman R.') |
+        (df_servicios['Responsable 2'] != 'Fredy Huaman R.')
+    ])
+    _n_nc = len(hoja6[(hoja6['Diferencia'] > 0) | (hoja6['Factura encontrada'] == False)])
+
+    df_resumen_val = pd.DataFrame([
+        {'Validación': 'Datos Incompletos',        'Descripción': 'Facturas con Responsable, Margen, OPCI o Producto vacío o guion', 'Errores': _n_incompletos},
+        {'Validación': 'Monto ERP ≠ Excel',         'Descripción': 'Diferencia en monto o tipo de cambio entre ERP y SharePoint',    'Errores': _n_monto_erp},
+        {'Validación': 'Responsable B24 vs Excel',  'Descripción': 'Responsables distintos entre Bitrix24 y SharePoint',              'Errores': _n_responsable},
+        {'Validación': 'OPCI Responsable Único',    'Descripción': 'OPCI con múltiples responsables asignados',                       'Errores': _n_opci},
+        {'Validación': 'Servicios - Resp. Fredy',   'Descripción': 'Servicios sin Fredy Huaman R. como responsable',                  'Errores': _n_fredy},
+        {'Validación': 'Nota Crédito Compensada',   'Descripción': 'Notas crédito con diferencia pendiente o factura no encontrada',  'Errores': _n_nc},
+    ])
+
     with pd.ExcelWriter('reporte.xlsx', engine='openpyxl') as writer:
         df.to_excel(writer, sheet_name='Hoja1', index=False)
         one.to_excel(writer, sheet_name='Hoja2', index=False)
@@ -357,6 +369,8 @@ def execute_report(
         df_conflictos.to_excel(writer, sheet_name='Hoja4', index=False)
         df_servicios.to_excel(writer, sheet_name='Hoja5', index=False)
         hoja6.to_excel(writer, sheet_name='Hoja6', index=False)
+        df_incompletos.to_excel(writer, sheet_name='Datos Incompletos', index=False)
+        df_resumen_val.to_excel(writer, sheet_name='Resumen Validaciones', index=False)
 
     nombre_archivo = "reporte.xlsx"
     wb = load_workbook(nombre_archivo)
@@ -376,7 +390,6 @@ def execute_report(
         [19, 21, 'A5A5A5'],
         [22, 22, '92D050'],
         [23, 28, 'A5A5A5'],
-
     ]
 
     for item in items:
@@ -475,8 +488,8 @@ def execute_report(
     ws.column_dimensions['N'].width = 44
     ws.auto_filter.ref = ws.dimensions
 
-    # Hoja N° 2
-
+    # Hoja N° 2 — Monto ERP = Excel
+    # Pre-filtro: ocultar filas sin discrepancia (G<=0 Y H<=0)
     ws = wb["Hoja2"]
     ws.conditional_formatting.add(
         f"G2:G{num_filas + 1}",
@@ -500,9 +513,14 @@ def execute_report(
     for col in ws.columns:
         ws.column_dimensions[col[0].column_letter].width = max(
             len(str(c.value or "")) for c in col) + 2
+    for r in range(2, ws.max_row + 1):
+        g_val = ws.cell(row=r, column=7).value or 0
+        h_val = ws.cell(row=r, column=8).value or 0
+        if not (g_val > 0 or h_val > 0):
+            ws.row_dimensions[r].hidden = True
 
-    # Hoja N° 3
-
+    # Hoja N° 3 — Responsable B24 vs Excel
+    # Pre-filtro: ocultar filas donde H==F y I==G (sin discrepancia)
     ws = wb["Hoja3"]
     ws.conditional_formatting.add(
         f"H2:H{num_filas + 1}",
@@ -522,11 +540,17 @@ def execute_report(
                              end_color="FFC7CE", fill_type="solid")
         )
     )
-
     ws.auto_filter.ref = ws.dimensions
     for col in ws.columns:
         ws.column_dimensions[col[0].column_letter].width = max(
             len(str(c.value or "")) for c in col) + 2
+    for r in range(2, ws.max_row + 1):
+        f_val = ws.cell(row=r, column=6).value
+        g_val = ws.cell(row=r, column=7).value
+        h_val = ws.cell(row=r, column=8).value
+        i_val = ws.cell(row=r, column=9).value
+        if h_val == f_val and i_val == g_val:
+            ws.row_dimensions[r].hidden = True
 
     # Hoja N° 4
     ws = wb["Hoja4"]
@@ -552,7 +576,8 @@ def execute_report(
         for cell in row:
             cell.fill = color_actual
 
-    # Hoja N° 5
+    # Hoja N° 5 — Servicios Responsable Fredy
+    # Pre-filtro: ocultar filas donde G y H ambos son Fredy (sin problema)
     ws = wb["Hoja5"]
     num_filas = len(df_servicios)
     ws.conditional_formatting.add(
@@ -573,13 +598,18 @@ def execute_report(
                              end_color="FFC7CE", fill_type="solid")
         )
     )
-
     ws.auto_filter.ref = ws.dimensions
     for col in ws.columns:
         ws.column_dimensions[col[0].column_letter].width = max(
             len(str(c.value or "")) for c in col) + 2
+    for r in range(2, ws.max_row + 1):
+        g_val = ws.cell(row=r, column=7).value
+        h_val = ws.cell(row=r, column=8).value
+        if g_val == "Fredy Huaman R." and h_val == "Fredy Huaman R.":
+            ws.row_dimensions[r].hidden = True
 
-    # Hoja N° 6
+    # Hoja N° 6 — Nota Crédito Compensada
+    # Pre-filtro: ocultar filas donde M<=0 y N=True (sin problema)
     ws = wb["Hoja6"]
     num_filas = len(hoja6)
     ws.conditional_formatting.add(
@@ -600,11 +630,64 @@ def execute_report(
                              end_color="FFC7CE", fill_type="solid")
         )
     )
-
     ws.auto_filter.ref = ws.dimensions
     for col in ws.columns:
         ws.column_dimensions[col[0].column_letter].width = max(
             len(str(c.value or "")) for c in col) + 2
+    for r in range(2, ws.max_row + 1):
+        m_val = ws.cell(row=r, column=13).value or 0
+        n_val = ws.cell(row=r, column=14).value
+        if not (m_val > 0 or n_val is False or n_val == False):
+            ws.row_dimensions[r].hidden = True
+
+    # Hoja Datos Incompletos — formato
+    ws = wb["Datos Incompletos"]
+    num_filas_inc = len(df_incompletos)
+    for col in ws.columns:
+        ws.column_dimensions[col[0].column_letter].width = max(
+            len(str(c.value or "")) for c in col) + 2
+    # Cabecera naranja para identificar la hoja fácilmente
+    for cell in ws[1]:
+        cell.fill = PatternFill(start_color="FF4500", fill_type="solid")
+        cell.font = Font(name="Tahoma", size=9, bold=True, color="FFFFFFFF")
+    # Marcar en amarillo las celdas de cada fila que están incompletas
+    _col_indices = {name: idx + 1 for idx, name in enumerate(df_incompletos.columns) if name in _cols_validar}
+    for r in range(2, num_filas_inc + 2):
+        for col_name, col_idx in _col_indices.items():
+            cell = ws.cell(row=r, column=col_idx)
+            if _campo_incompleto(cell.value):
+                cell.fill = PatternFill(start_color="FFC7CE", fill_type="solid")
+                cell.font = Font(name="Tahoma", size=9, color="9C002A", bold=True)
+            else:
+                cell.font = Font(name="Tahoma", size=9)
+        # Resto de celdas
+        for cell in ws[r]:
+            if cell.column not in _col_indices.values():
+                cell.font = Font(name="Tahoma", size=9)
+    ws.auto_filter.ref = ws.dimensions
+
+    # Hoja Resumen Validaciones — formato
+    ws = wb["Resumen Validaciones"]
+    _col_colors = ['5B9BD5', 'A5A5A5', '70AD47']  # Validación, Descripción, Errores
+    for ci, color in enumerate(_col_colors, 1):
+        cell = ws.cell(row=1, column=ci)
+        cell.fill = PatternFill(start_color=color, fill_type="solid")
+        cell.font = Font(name="Tahoma", size=10, bold=True, color="FFFFFFFF")
+    for r in range(2, len(df_resumen_val) + 2):
+        errores = ws.cell(row=r, column=3).value or 0
+        color_fila = "FFC7CE" if errores > 0 else "E2EFDA"
+        font_err   = Font(name="Tahoma", size=10, bold=True, color="9C002A" if errores > 0 else "375623")
+        for ci in range(1, 4):
+            cell = ws.cell(row=r, column=ci)
+            cell.font = font_err if ci == 3 else Font(name="Tahoma", size=10)
+        ws.cell(row=r, column=3).fill = PatternFill(start_color=color_fila, fill_type="solid")
+    ws.column_dimensions['A'].width = 30
+    ws.column_dimensions['B'].width = 62
+    ws.column_dimensions['C'].width = 12
+
+    # Mover "Resumen Validaciones" a la segunda posición (tras Hoja1)
+    idx_actual = wb.sheetnames.index("Resumen Validaciones")
+    wb.move_sheet("Resumen Validaciones", offset=-(idx_actual - 1))
 
     wb.save(nombre_archivo)
 
@@ -690,6 +773,182 @@ def execute_report(
     # Calcular comisiones individuales (temporal para el reporte Excel)
     df['Comisión 1'] = df['Comisión Total'] * df['Porcentaje 1']
     df['Comisión 2'] = df['Comisión Total'] * df['Porcentaje 2']
+
+    # ── Agregar Comisiona, Comisión 1, Comisión 2, Estado a Hoja1 ────────────
+    wb2 = load_workbook(nombre_archivo)
+    ws2 = wb2['Hoja1']
+
+    # Headers (AC=29, AD=30, AE=31, AF=32)
+    for col_num, header, color in [
+        (29, 'Comisiona',  'A5A5A5'),
+        (30, 'Comisión 1', '70AD47'),
+        (31, 'Comisión 2', '70AD47'),
+        (32, 'Estado',     'A5A5A5'),
+    ]:
+        cell = ws2.cell(row=1, column=col_num)
+        cell.value = header
+        cell.fill = PatternFill(start_color=color, fill_type='solid')
+        cell.font = Font(name='Tahoma', size=9, bold=True, color='FFFFFFFF')
+
+    # Fila a fila (idx 0-based → fila Excel = idx + 2)
+    for idx, row in df.iterrows():
+        r = idx + 2
+        # Comisiona: valor directo
+        c = ws2.cell(row=r, column=29)
+        c.value = bool(row['Comisiona'])
+        c.font = Font(name='Tahoma', size=9)
+        # Comisión 1 y 2: fórmulas referenciando AC
+        ws2[f'AD{r}'] = f'=IF(AC{r},S{r}*0.01*0.7,0)'
+        ws2[f'AE{r}'] = (
+            f'=IF(AC{r},'
+            f'S{r}*0.01*IF(AND(ISNUMBER(SEARCH("Paolo",E{r})),ISNUMBER(SEARCH("Proy",K{r}))),0.5,0.3),'
+            f'0)'
+        )
+        ws2[f'AD{r}'].font = Font(name='Tahoma', size=9)
+        ws2[f'AE{r}'].font = Font(name='Tahoma', size=9)
+        # Estado: valor directo
+        c = ws2.cell(row=r, column=32)
+        c.value = 'Estándar' if row['Comisiona'] else 'Atípico'
+        c.font = Font(name='Tahoma', size=9)
+
+    ws2.column_dimensions['AC'].width = 12
+    ws2.column_dimensions['AD'].width = 14
+    ws2.column_dimensions['AE'].width = 14
+    ws2.column_dimensions['AF'].width = 12
+
+    # ── HOJAS 7-10: Una hoja por trimestre – Umbral UNAU ─────────────────────
+    NOMBRES_MESES = {
+        1: 'Ene', 2: 'Feb', 3: 'Mar', 4: 'Abr',
+        5: 'May', 6: 'Jun', 7: 'Jul', 8: 'Ago',
+        9: 'Sep', 10: 'Oct', 11: 'Nov', 12: 'Dic'
+    }
+
+    # Vendedores UNAU base (para mostrar incluso si no tuvieron ventas)
+    vendedores_unau = [v for v, u in uns.items() if u == 'UNAU']
+
+    def _escribir_hoja_trimestre(wb_obj, sheet_name, q_label, q_meses, df_endress):
+        """Escribe las dos tablas de umbral para un trimestre en una hoja nueva."""
+        endress_q = df_endress[df_endress['MES'].isin(q_meses)]
+
+        # Pivot con todos los vendedores UNAU, incluyendo los que no tienen ventas
+        if not endress_q.empty:
+            pivot_q = (
+                endress_q.pivot_table(
+                    index='Responsable 1',
+                    columns='MES',
+                    values='Monto Total',
+                    aggfunc='sum',
+                    fill_value=0,
+                )
+                .reset_index()
+            )
+        else:
+            pivot_q = pd.DataFrame({'Responsable 1': []})
+
+        # Asegurar que todos los vendedores UNAU aparezcan
+        base = pd.DataFrame({'Responsable 1': vendedores_unau})
+        pivot_q = base.merge(pivot_q, on='Responsable 1', how='left').fillna(0)
+
+        for m in q_meses:
+            if m not in pivot_q.columns:
+                pivot_q[m] = 0.0
+
+        pivot_q['Total General'] = pivot_q[[m for m in q_meses]].sum(axis=1)
+        pivot_q['Umbral Mensual'] = pivot_q['Responsable 1'].map(umbrales).fillna(0)
+        pivot_q['Umbral Trimestral'] = pivot_q['Umbral Mensual'] * 3
+        pivot_q['Paso'] = pivot_q.apply(
+            lambda row: row['Total General'] > row['Umbral Trimestral'] or
+                        any(row[m] > row['Umbral Mensual'] for m in q_meses),
+            axis=1
+        )
+
+        ws = wb_obj.create_sheet(sheet_name)
+
+        # Título
+        title_cell = ws['A1']
+        title_cell.value = f'Resumen Umbral Trimestral – {q_label}'
+        title_cell.font = Font(name='Tahoma', size=11, bold=True)
+
+        # ── Tabla 1: montos por mes ───────────────────────────────────────────
+        T1_ROW = 3
+        t1_headers = ['Vendedor'] + [NOMBRES_MESES[m] for m in q_meses] + ['Total General']
+        for ci, hdr in enumerate(t1_headers, 1):
+            cell = ws.cell(row=T1_ROW, column=ci)
+            cell.value = hdr
+            cell.fill = PatternFill(start_color='5B9BD5', fill_type='solid')
+            cell.font = Font(name='Tahoma', size=9, bold=True, color='FFFFFFFF')
+
+        for ri, (_, row) in enumerate(pivot_q.iterrows(), 1):
+            r = T1_ROW + ri
+            ws.cell(row=r, column=1).value = row['Responsable 1']
+            ws.cell(row=r, column=1).font = Font(name='Tahoma', size=9)
+            for ci, m in enumerate(q_meses, 2):
+                cell = ws.cell(row=r, column=ci)
+                cell.value = float(row.get(m, 0))
+                cell.number_format = '#,##0.00'
+                cell.font = Font(name='Tahoma', size=9)
+            tc = ws.cell(row=r, column=len(q_meses) + 2)
+            tc.value = float(row['Total General'])
+            tc.number_format = '#,##0.00'
+            tc.font = Font(name='Tahoma', size=9, bold=True)
+
+        # ── Tabla 2: umbral y resultado ───────────────────────────────────────
+        T2_ROW = T1_ROW + len(pivot_q) + 3
+
+        # Subtítulo tabla 2
+        sub = ws.cell(row=T2_ROW - 1, column=1)
+        sub.value = '¿Pasó el umbral?'
+        sub.font = Font(name='Tahoma', size=9, bold=True, italic=True)
+
+        t2_headers = ['Vendedor', 'Umbral Mensual', 'Umbral Trimestral', 'Total', '¿Pasó?']
+        t2_colors = ['A5A5A5', 'FFC000', 'FFC000', '5B9BD5', '70AD47']
+        for ci, (hdr, color) in enumerate(zip(t2_headers, t2_colors), 1):
+            cell = ws.cell(row=T2_ROW, column=ci)
+            cell.value = hdr
+            cell.fill = PatternFill(start_color=color, fill_type='solid')
+            cell.font = Font(name='Tahoma', size=9, bold=True, color='FFFFFFFF')
+
+        for ri, (_, row) in enumerate(pivot_q.iterrows(), 1):
+            r = T2_ROW + ri
+            ws.cell(row=r, column=1).value = row['Responsable 1']
+            ws.cell(row=r, column=1).font = Font(name='Tahoma', size=9)
+
+            for ci, col_key, fmt in [
+                (2, 'Umbral Mensual', '#,##0.00'),
+                (3, 'Umbral Trimestral', '#,##0.00'),
+                (4, 'Total General', '#,##0.00'),
+            ]:
+                cell = ws.cell(row=r, column=ci)
+                cell.value = float(row[col_key])
+                cell.number_format = fmt
+                cell.font = Font(name='Tahoma', size=9)
+
+            paso = bool(row['Paso'])
+            paso_cell = ws.cell(row=r, column=5)
+            paso_cell.value = 'SI' if paso else 'NO'
+            paso_cell.fill = PatternFill(
+                start_color='70AD47' if paso else 'FF4040', fill_type='solid')
+            paso_cell.font = Font(name='Tahoma', size=9, bold=True, color='FFFFFFFF')
+
+        # Ajustar anchos
+        for col in ws.columns:
+            max_len = max((len(str(cell.value or '')) for cell in col), default=10)
+            ws.column_dimensions[col[0].column_letter].width = max_len + 4
+
+    mes_actual = pd.Timestamp.now().month
+    trimestres_a_generar = [
+        ('Hoja7',  'Q1 (Ene–Mar)', [1, 2, 3]),
+        ('Hoja8',  'Q2 (Abr–Jun)', [4, 5, 6]),
+        ('Hoja9',  'Q3 (Jul–Sep)', [7, 8, 9]),
+        ('Hoja10', 'Q4 (Oct–Dic)', [10, 11, 12]),
+    ]
+    for sheet_name, q_label, q_meses in trimestres_a_generar:
+        if q_meses[0] <= mes_actual:
+            _escribir_hoja_trimestre(wb2, sheet_name, q_label, q_meses, endress)
+    # ─────────────────────────────────────────────────────────────────────────
+
+    wb2.save(nombre_archivo)
+    # ─────────────────────────────────────────────────────────────────────────
 
     # Determinar producto simplificado
     df['Producto'] = np.where(

@@ -72,6 +72,10 @@ def export_report():
             "Hoja4": "OPCI Responsable Único",
             "Hoja5": "Servicios Responsable Fredy",
             "Hoja6": "Nota Crédito Compensada",
+            "Hoja7": "Umbral Q1",
+            "Hoja8": "Umbral Q2",
+            "Hoja9": "Umbral Q3",
+            "Hoja10": "Umbral Q4",
         }
         for old_name, new_name in rename_map.items():
             if old_name in wb.sheetnames:
@@ -188,6 +192,44 @@ async def get_facturas_by_user(name_user: str = Query(..., description="Nombre d
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/analisis")
+def get_analisis():
+    try:
+        from services.analisis_service import get_analisis as _get_analisis
+        return _get_analisis()
+    except Exception as e:
+        print(f"Error en get_analisis: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error al obtener análisis: {str(e)}")
+
+
+@router.post("/sync-bitrix")
+async def sync_from_bitrix(ventas_data: Optional[str] = Form(None)):
+    try:
+        from services.bitrix_service import fetch_invoices_from_bitrix
+        import json as _json
+
+        df_invoices = fetch_invoices_from_bitrix()
+
+        df_ventas = None
+        if ventas_data:
+            df_ventas = pd.DataFrame(_json.loads(ventas_data))
+
+        report_service.execute_report(
+            data_invoices=df_invoices,
+            data_ventas=df_ventas,
+        )
+
+        return {'message': f'Sincronización exitosa: {len(df_invoices)} invoices obtenidas de Bitrix24'}
+
+    except Exception as e:
+        print(f"Error en sync_from_bitrix: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error al sincronizar con Bitrix24: {str(e)}")
 
 
 @router.get("")
