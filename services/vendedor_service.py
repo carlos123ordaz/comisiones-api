@@ -1,5 +1,7 @@
+from io import BytesIO
 from bson import ObjectId
 from typing import List, Optional
+from openpyxl import load_workbook
 from config.database import vendedores_collection
 from models.vendedor import VendedorCreate, VendedorUpdate, Vendedor
 
@@ -94,6 +96,78 @@ def delete_vendedor(vendedor_id: str) -> bool:
         raise ValueError("Vendedor no encontrado")
 
     return True
+
+
+def importar_vendedores_excel(file_bytes: bytes) -> dict:
+    wb = load_workbook(filename=BytesIO(file_bytes), data_only=True)
+    ws = wb.active
+
+    headers = [cell.value for cell in next(ws.iter_rows(min_row=1, max_row=1))]
+    required = ['RESPONSIBLE_ID', 'DEPARTAMENTO', 'META MENSUAL ($)', 'Umbral']
+    for col in required:
+        if col not in headers:
+            raise ValueError(f"Columna requerida no encontrada: '{col}'")
+
+    col_idx = {h: i for i, h in enumerate(headers)}
+    creados = 0
+    actualizados = 0
+    errores = []
+
+    for row_num, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+        nombre = row[col_idx['RESPONSIBLE_ID']]
+        if not nombre:
+            continue
+
+        nombre = str(nombre).strip()
+        departamento = str(row[col_idx['DEPARTAMENTO']] or '-').strip()
+        meta_mensual = row[col_idx['META MENSUAL ($)']]
+        umbral_pct = row[col_idx['Umbral']]
+
+        if meta_mensual is None or umbral_pct is None:
+            errores.append(f"Fila {row_num}: datos incompletos para '{nombre}'")
+            continue
+
+        try:
+            meta_mensual = float(meta_mensual)
+            umbral_pct = float(umbral_pct)
+        except (ValueError, TypeError):
+            errores.append(f"Fila {row_num}: valores numéricos inválidos para '{nombre}'")
+            continue
+
+        # El Excel tiene el umbral como decimal (0.6 = 60%), convertir a porcentaje
+        if umbral_pct <= 1:
+            umbral_pct = umbral_pct * 100
+
+        umbrales = calcular_umbrales(meta_mensual, umbral_pct)
+
+        existente = vendedores_collection.find_one({'nombre': nombre})
+        if existente:
+            vendedores_collection.update_one(
+                {'_id': existente['_id']},
+                {'$set': {
+                    'meta_mensual': meta_mensual,
+                    'porcentaje_umbral': umbral_pct,
+                    'unidad_negocio': departamento,
+                    **umbrales
+                }}
+            )
+            actualizados += 1
+        else:
+            vendedores_collection.insert_one({
+                'nombre': nombre,
+                'meta_mensual': meta_mensual,
+                'porcentaje_umbral': umbral_pct,
+                'unidad_negocio': departamento,
+                **umbrales
+            })
+            creados += 1
+
+    return {
+        'creados': creados,
+        'actualizados': actualizados,
+        'errores': errores,
+        'message': f'{creados} creados, {actualizados} actualizados' + (f', {len(errores)} errores' if errores else '')
+    }
 
 
 def get_vendedor_by_nombre(nombre: str) -> Optional[dict]:

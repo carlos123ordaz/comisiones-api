@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, UploadFile, File
 from typing import List
 from models.vendedor import VendedorCreate, VendedorUpdate, Vendedor
 from services import vendedor_service, invoice_service
@@ -54,6 +54,23 @@ def delete_vendedor(vendedor_id: str):
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Error al eliminar vendedor: {str(e)}")
+
+
+@router.post("/importar")
+async def importar_vendedores(file: UploadFile = File(...)):
+    try:
+        if not file.filename.endswith(('.xlsx', '.xls')):
+            raise HTTPException(status_code=400, detail="El archivo debe ser un Excel (.xlsx o .xls)")
+        contents = await file.read()
+        result = vendedor_service.importar_vendedores_excel(contents)
+        invoice_service.recalcular_comisiones()
+        return result
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al importar: {str(e)}")
 
 
 @router.get("/usuarios", tags=["usuarios"])
