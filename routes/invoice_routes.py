@@ -56,7 +56,7 @@ def get_facturas_filtros():
 
 
 @router.get("/export_report")
-def export_report():
+def export_report(segmento: Optional[str] = Query(None, description="Segmento: logistica, facturacion, o vacío para completo")):
     from openpyxl.styles import Font, PatternFill
     from config.database import invoices_collection, vendedores_collection
     import datetime
@@ -216,6 +216,30 @@ def export_report():
                 max_len = max((len(str(c.value or '')) for c in col), default=10)
                 ws.column_dimensions[col[0].column_letter].width = max_len + 4
 
+        # Filtrar hojas según segmento
+        SEGMENTOS = {
+            "logistica": {
+                "Responsable B24 vs Excel",
+                "OPCI Responsable Único",
+                "Servicios Responsable Fredy",
+                "Resumen Validaciones",
+            },
+            "facturacion": {
+                "Monto ERP = Excel",
+                "Nota Crédito Compensada",
+                "Datos Incompletos",
+                "Resumen Validaciones",
+            },
+        }
+
+        if segmento and segmento in SEGMENTOS:
+            keep = SEGMENTOS[segmento]
+            for name in list(wb.sheetnames):
+                if name not in keep:
+                    wb.remove(wb[name])
+
+        suffix = f"_{segmento}" if segmento and segmento in SEGMENTOS else ""
+
         buffer = BytesIO()
         wb.save(buffer)
         buffer.seek(0)
@@ -224,7 +248,7 @@ def export_report():
             buffer,
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             headers={
-                "Content-Disposition": "attachment; filename=reporte_invoices.xlsx"}
+                "Content-Disposition": f"attachment; filename=reporte_invoices{suffix}.xlsx"}
         )
     except Exception as e:
         print(f"Error en export_report: {str(e)}")
