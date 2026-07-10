@@ -11,7 +11,7 @@ def calcular_umbrales(meta_mensual: float, porcentaje_umbral: float):
     return {
         "umbral_mensual": umbral_mensual,
         "umbral_trimestral": umbral_mensual * 3,
-        "umbral_meta": umbral_mensual * 5/4
+        "umbral_meta": umbral_mensual
     }
 
 

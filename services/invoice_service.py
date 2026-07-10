@@ -511,9 +511,44 @@ def recalcular_comisiones() -> bool:
         df['comision_total'] = df['comision_total'].replace(
             [np.inf, -np.inf, np.nan], 0).astype(float)
 
+        # Preservar responsables editados manualmente antes de borrar
+        facturas_manuales = {
+            doc['numero']: [
+                {'nombre': r['nombre'], 'porcentaje': r['porcentaje']}
+                for r in doc.get('responsables', [])
+            ]
+            for doc in invoices_collection.find(
+                {'manually_edited': True},
+                {'numero': 1, 'responsables': 1}
+            )
+        }
+
         # Actualizar base de datos
         invoices_collection.delete_many({})
         invoices_collection.insert_many(df.to_dict(orient='records'))
+
+        # Restaurar responsables editados manualmente, recalculando comisiones con los nuevos montos
+        if facturas_manuales:
+            for doc in invoices_collection.find(
+                {'numero': {'$in': list(facturas_manuales.keys())}},
+                {'numero': 1, 'comision_total': 1, 'comisiona': 1}
+            ):
+                numero = doc['numero']
+                comision_total = doc.get('comision_total', 0)
+                comisiona = doc.get('comisiona', True)
+
+                nuevos_responsables = []
+                for r in facturas_manuales[numero]:
+                    nuevos_responsables.append({
+                        'nombre': r['nombre'],
+                        'porcentaje': r['porcentaje'],
+                        'comision': comision_total * r['porcentaje'] if comisiona else 0
+                    })
+
+                invoices_collection.update_one(
+                    {'numero': numero},
+                    {'$set': {'responsables': nuevos_responsables, 'manually_edited': True}}
+                )
 
         return True
 
