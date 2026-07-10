@@ -699,19 +699,10 @@ def execute_report(
     df = df[df['Responsable 1'].notna()]
     endress = df[df['Producto CRM'].str.contains('Endress', na=False)]
 
-    umbrales = {
-        'Jesus Alvarado M.': 66000, 'Alexandra Cruz C.': 36500, 'Shyla Quiroz C.': 39000,
-        'Lino Castro V.': 63600, 'Gianella Belleza Z.': 30250, 'Alberto Gutierrez G.': 26650,
-        'Yovany Barrera C.': 200000, 'Katherine Llerena C.': 57000, 'Martin Jordan C.': 21000,
-        'Sergio Villena M.': 2000, 'Fernando Gomez D.': 1000, 'Janeth Quico D.': 1000
-    }
-
-    uns = {
-        'Jesus Alvarado M.': 'UNAU', 'Alexandra Cruz C.': 'UNAU', 'Shyla Quiroz C.': 'UNAU',
-        'Lino Castro V.': 'UNAU', 'Gianella Belleza Z.': 'UNAU', 'Alberto Gutierrez G.': 'UNAU',
-        'Yovany Barrera C.': 'UNAI', 'Katherine Llerena C.': 'UNAU', 'Martin Jordan C.': 'UNAU',
-        'Sergio Villena M.': 'UNAU', 'Fernando Gomez D.': 'UNVA', 'Janeth Quico D.': 'UNAI'
-    }
+    vendedores_db = list(database.vendedores_collection.find(
+        {'esLider': {'$exists': False}}))
+    umbrales = {v['nombre']: v['umbral_mensual'] for v in vendedores_db}
+    uns = {v['nombre']: v['unidad_negocio'] for v in vendedores_db}
 
     trimestres = {
         'Q1': [1, 2, 3],
