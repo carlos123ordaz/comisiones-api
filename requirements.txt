@@ -11,3 +11,4 @@ msal
 requests
 openpyxl
 python-dotenv
+apscheduler

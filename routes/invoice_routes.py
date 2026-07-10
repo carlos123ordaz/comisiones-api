@@ -12,7 +12,23 @@ import tempfile
 from openpyxl import load_workbook
 from fastapi.responses import StreamingResponse
 from io import BytesIO
+from services.scheduler_service import last_auto_sync
+
 router = APIRouter(prefix="/invoices", tags=["invoices"])
+
+
+@router.get("/last-sync")
+def get_last_sync():
+    """Retorna la fecha/hora de la ultima sincronizacion (manual o automatica)."""
+    from config.database import db
+    sync_record = db["sync_log"].find_one(sort=[("timestamp", -1)])
+    if sync_record:
+        return {
+            "timestamp": sync_record["timestamp"],
+            "type": sync_record.get("type", "unknown"),
+            "status": sync_record.get("status", "unknown"),
+        }
+    return {"timestamp": None, "type": None, "status": None}
 
 
 @router.get("/dashboard")
@@ -588,6 +604,9 @@ def get_analisis():
 
 @router.post("/sync-bitrix")
 async def sync_from_bitrix(ventas_data: Optional[str] = Form(None)):
+    from config.database import db
+    from datetime import datetime
+
     try:
         from services.bitrix_service import fetch_invoices_from_bitrix
         import json as _json
@@ -603,12 +622,25 @@ async def sync_from_bitrix(ventas_data: Optional[str] = Form(None)):
             data_ventas=df_ventas,
         )
 
+        db["sync_log"].insert_one({
+            "timestamp": datetime.now().isoformat(),
+            "type": "manual",
+            "status": "success",
+            "message": f"{len(df_invoices)} invoices sincronizadas",
+        })
+
         return {'message': f'Sincronización exitosa: {len(df_invoices)} invoices obtenidas de Bitrix24'}
 
     except Exception as e:
         print(f"Error en sync_from_bitrix: {str(e)}")
         import traceback
         traceback.print_exc()
+        db["sync_log"].insert_one({
+            "timestamp": datetime.now().isoformat(),
+            "type": "manual",
+            "status": "error",
+            "message": str(e),
+        })
         raise HTTPException(status_code=500, detail=f"Error al sincronizar con Bitrix24: {str(e)}")
 
 

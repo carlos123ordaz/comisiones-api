@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from routes.vendedor_routes import router as vendedor_router
@@ -6,8 +7,17 @@ from routes.invoice_detail_routes import router as invoice_detail_router
 from routes.resumen_routes import router as resumen_router
 from routes.auth_routes import router as auth_router
 from config.database import client
+from services.scheduler_service import start_scheduler, scheduler
 
-app = FastAPI(title="API de Dashboard de Ventas")
+
+@asynccontextmanager
+async def lifespan(app):
+    start_scheduler()
+    yield
+    scheduler.shutdown()
+
+
+app = FastAPI(title="API de Dashboard de Ventas", lifespan=lifespan)
 
 # Configurar CORS
 app.add_middleware(
