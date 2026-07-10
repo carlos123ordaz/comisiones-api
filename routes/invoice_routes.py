@@ -605,7 +605,7 @@ def get_analisis():
 @router.post("/sync-bitrix")
 async def sync_from_bitrix(ventas_data: Optional[str] = Form(None)):
     from config.database import db
-    from datetime import datetime
+    from datetime import datetime, timezone
 
     try:
         from services.bitrix_service import fetch_invoices_from_bitrix
@@ -623,7 +623,7 @@ async def sync_from_bitrix(ventas_data: Optional[str] = Form(None)):
         )
 
         db["sync_log"].insert_one({
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "type": "manual",
             "status": "success",
             "message": f"{len(df_invoices)} invoices sincronizadas",
@@ -636,7 +636,7 @@ async def sync_from_bitrix(ventas_data: Optional[str] = Form(None)):
         import traceback
         traceback.print_exc()
         db["sync_log"].insert_one({
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "type": "manual",
             "status": "error",
             "message": str(e),

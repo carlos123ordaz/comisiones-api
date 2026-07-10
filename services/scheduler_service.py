@@ -1,6 +1,6 @@
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
-from datetime import datetime
+from datetime import datetime, timezone
 
 scheduler = BackgroundScheduler()
 last_auto_sync = {"timestamp": None, "status": None, "message": None}
@@ -16,7 +16,7 @@ def sync_bitrix_job():
     try:
         df_invoices = fetch_invoices_from_bitrix()
         execute_report(data_invoices=df_invoices, data_ventas=None)
-        last_auto_sync["timestamp"] = datetime.now().isoformat()
+        last_auto_sync["timestamp"] = datetime.now(timezone.utc).isoformat()
         last_auto_sync["status"] = "success"
         last_auto_sync["message"] = f"{len(df_invoices)} invoices sincronizadas"
         db["sync_log"].insert_one({
@@ -27,7 +27,7 @@ def sync_bitrix_job():
         })
         print(f"[CRON] Sync exitoso: {last_auto_sync['message']}")
     except Exception as e:
-        last_auto_sync["timestamp"] = datetime.now().isoformat()
+        last_auto_sync["timestamp"] = datetime.now(timezone.utc).isoformat()
         last_auto_sync["status"] = "error"
         last_auto_sync["message"] = str(e)
         db["sync_log"].insert_one({
