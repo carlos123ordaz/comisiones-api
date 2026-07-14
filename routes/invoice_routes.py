@@ -238,12 +238,12 @@ def export_report(segmento: Optional[str] = Query(None, description="Segmento: l
                 "Responsable B24 vs Excel",
                 "OPCI Responsable Único",
                 "Servicios Responsable Fredy",
+                "Datos Incompletos",
                 "Resumen Validaciones",
             },
             "facturacion": {
                 "Monto ERP = Excel",
                 "Nota Crédito Compensada",
-                "Datos Incompletos",
                 "Resumen Validaciones",
             },
         }

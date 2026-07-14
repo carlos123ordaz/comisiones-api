@@ -354,7 +354,7 @@ def execute_report(
     _n_nc = len(hoja6[(hoja6['Diferencia'] > 0) | (hoja6['Factura encontrada'] == False)])
 
     df_resumen_val = pd.DataFrame([
-        {'Validación': 'Datos Incompletos',        'Descripción': 'Facturas con Responsable, Margen, OPCI o Producto vacío o guion', 'Errores': _n_incompletos, 'Archivo': 'Facturación'},
+        {'Validación': 'Datos Incompletos',        'Descripción': 'Facturas con Responsable, Margen, OPCI o Producto vacío o guion', 'Errores': _n_incompletos, 'Archivo': 'Logística'},
         {'Validación': 'Monto ERP ≠ Excel',         'Descripción': 'Diferencia en monto o tipo de cambio entre ERP y Facturacion_OP',    'Errores': _n_monto_erp,   'Archivo': 'Facturación'},
         {'Validación': 'Responsable B24 vs Excel',  'Descripción': 'Responsables distintos entre Bitrix24 y Facturacion_OP',              'Errores': _n_responsable, 'Archivo': 'Logística'},
         {'Validación': 'OPCI Responsable Único',    'Descripción': 'OPCI con múltiples responsables asignados',                       'Errores': _n_opci,        'Archivo': 'Logística'},
