@@ -355,8 +355,8 @@ def execute_report(
 
     df_resumen_val = pd.DataFrame([
         {'Validación': 'Datos Incompletos',        'Descripción': 'Facturas con Responsable, Margen, OPCI o Producto vacío o guion', 'Errores': _n_incompletos, 'Archivo': 'Facturación'},
-        {'Validación': 'Monto ERP ≠ Excel',         'Descripción': 'Diferencia en monto o tipo de cambio entre ERP y SharePoint',    'Errores': _n_monto_erp,   'Archivo': 'Facturación'},
-        {'Validación': 'Responsable B24 vs Excel',  'Descripción': 'Responsables distintos entre Bitrix24 y SharePoint',              'Errores': _n_responsable, 'Archivo': 'Logística'},
+        {'Validación': 'Monto ERP ≠ Excel',         'Descripción': 'Diferencia en monto o tipo de cambio entre ERP y Facturacion_OP',    'Errores': _n_monto_erp,   'Archivo': 'Facturación'},
+        {'Validación': 'Responsable B24 vs Excel',  'Descripción': 'Responsables distintos entre Bitrix24 y Facturacion_OP',              'Errores': _n_responsable, 'Archivo': 'Logística'},
         {'Validación': 'OPCI Responsable Único',    'Descripción': 'OPCI con múltiples responsables asignados',                       'Errores': _n_opci,        'Archivo': 'Logística'},
         {'Validación': 'Servicios - Resp. Fredy',   'Descripción': 'Servicios sin Fredy Huaman R. como responsable',                  'Errores': _n_fredy,       'Archivo': 'Logística'},
         {'Validación': 'Nota Crédito Compensada',   'Descripción': 'Notas crédito con diferencia pendiente o factura no encontrada',  'Errores': _n_nc,          'Archivo': 'Facturación'},
