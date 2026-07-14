@@ -3,7 +3,7 @@ from msal import ConfidentialClientApplication
 import requests
 import os
 from openpyxl import load_workbook
-from openpyxl.styles import Font, PatternFill
+from openpyxl.styles import Font, PatternFill, Alignment
 from openpyxl.formatting.rule import FormulaRule
 import numpy as np
 import unicodedata
@@ -354,12 +354,78 @@ def execute_report(
     _n_nc = len(hoja6[(hoja6['Diferencia'] > 0) | (hoja6['Factura encontrada'] == False)])
 
     df_resumen_val = pd.DataFrame([
-        {'Validación': 'Datos Incompletos',        'Descripción': 'Facturas con Responsable, Margen, OPCI o Producto vacío o guion', 'Errores': _n_incompletos, 'Archivo': 'Logística'},
-        {'Validación': 'Monto ERP ≠ Excel',         'Descripción': 'Diferencia en monto o tipo de cambio entre ERP y Facturacion_OP',    'Errores': _n_monto_erp,   'Archivo': 'Facturación'},
-        {'Validación': 'Responsable B24 vs Excel',  'Descripción': 'Responsables distintos entre Bitrix24 y Facturacion_OP',              'Errores': _n_responsable, 'Archivo': 'Logística'},
-        {'Validación': 'OPCI Responsable Único',    'Descripción': 'OPCI con múltiples responsables asignados',                       'Errores': _n_opci,        'Archivo': 'Logística'},
-        {'Validación': 'Servicios - Resp. Fredy',   'Descripción': 'Servicios sin Fredy Huaman R. como responsable',                  'Errores': _n_fredy,       'Archivo': 'Logística'},
-        {'Validación': 'Nota Crédito Compensada',   'Descripción': 'Notas crédito con diferencia pendiente o factura no encontrada',  'Errores': _n_nc,          'Archivo': 'Facturación'},
+        {
+            'Hoja del Reporte': 'Monto ERP = Excel',
+            'Validación': 'Diferencia de monto',
+            '¿Qué significa?': 'El monto registrado en Facturación_OP no coincide con el monto del ERP.',
+            '¿Quién corrige?': 'Facturación',
+            '¿Dónde se corrige?': 'Facturación_OP',
+            'Acción del Asistente Comercial': 'Solicitar la corrección del archivo Facturación_OP y volver a ejecutar el programa para verificar que la diferencia desaparezca.',
+            'Comentarios': '',
+        },
+        {
+            'Hoja del Reporte': 'Monto ERP = Excel',
+            'Validación': 'Diferencia de tipo de cambio',
+            '¿Qué significa?': 'El tipo de cambio registrado en Facturación_OP no coincide con el ERP.',
+            '¿Quién corrige?': 'Facturación',
+            '¿Dónde se corrige?': 'Facturación_OP',
+            'Acción del Asistente Comercial': 'Solicitar la corrección del tipo de cambio y volver a ejecutar el programa.',
+            'Comentarios': 'El tipo de cambio debe contener 3 decimales. Además manda el tipo de cambio del ERP.',
+        },
+        {
+            'Hoja del Reporte': 'Responsable B24 vs Excel',
+            'Validación': 'Responsables distintos',
+            '¿Qué significa?': 'Los responsables registrados en el cuadro de Ventas_OP no coincide con el responsable del B24 (Invoices).',
+            '¿Quién corrige?': 'Logística',
+            '¿Dónde se corrige?': 'Invoice y Ventas_OP',
+            'Acción del Asistente Comercial': 'Solicitar la revisión de la información con el líder del vendedor, actualizar Ventas_OP y volver a ejecutar el programa.',
+            'Comentarios': '',
+        },
+        {
+            'Hoja del Reporte': 'OPCI Responsable Único',
+            'Validación': 'Responsables diferentes para una misma OPCI',
+            '¿Qué significa?': 'Una misma OPCI presenta distintos responsables, generando ambigüedad en la asignación de la comisión.',
+            '¿Quién corrige?': 'Logística',
+            '¿Dónde se corrige?': 'Ventas_OP',
+            'Acción del Asistente Comercial': 'Solicitar la regularización de la OPCI y volver a ejecutar el programa.',
+            'Comentarios': '',
+        },
+        {
+            'Hoja del Reporte': 'Servicios Responsable Fredy',
+            'Validación': 'Responsable de servicio incorrecto',
+            '¿Qué significa?': 'El servicio fue asignado a un responsable distinto al establecido para este tipo de productos.',
+            '¿Quién corrige?': 'Logística',
+            '¿Dónde se corrige?': 'Invoice y Ventas_OP',
+            'Acción del Asistente Comercial': 'Solicitar la corrección de la asignación y volver a ejecutar el programa.',
+            'Comentarios': 'Es posible que sea necesario generar otro número de OPCI.',
+        },
+        {
+            'Hoja del Reporte': 'Resumen',
+            'Validación': 'OPCI no encontrada',
+            '¿Qué significa?': 'No fue posible relacionar la factura con una OPCI registrada.',
+            '¿Quién corrige?': 'Logística',
+            '¿Dónde se corrige?': 'Ventas_OP',
+            'Acción del Asistente Comercial': 'Solicitar el registro o corrección del Correlativo OPCI y volver a ejecutar el programa.',
+            'Comentarios': '',
+        },
+        {
+            'Hoja del Reporte': 'Resumen',
+            'Validación': 'Producto CRM vacío o incorrecto',
+            '¿Qué significa?': 'El Producto CRM no existe o no coincide con la información comercial del pedido.',
+            '¿Quién corrige?': 'Logística',
+            '¿Dónde se corrige?': 'Ventas_OP y/o Facturación_OP',
+            'Acción del Asistente Comercial': 'Solicitar la actualización del Producto CRM y volver a ejecutar el programa.',
+            'Comentarios': '',
+        },
+        {
+            'Hoja del Reporte': 'Resumen',
+            'Validación': 'Utilidad Bruta vacía',
+            '¿Qué significa?': 'No existe Utilidad Bruta registrada para la OPCI, por lo que no es posible calcular correctamente la comisión.',
+            '¿Quién corrige?': 'Logística',
+            '¿Dónde se corrige?': 'Ventas_OP',
+            'Acción del Asistente Comercial': 'Solicitar el registro de la Utilidad Bruta y volver a ejecutar el programa.',
+            'Comentarios': '',
+        },
     ])
 
     with pd.ExcelWriter('reporte.xlsx', engine='openpyxl') as writer:
@@ -668,23 +734,24 @@ def execute_report(
 
     # Hoja Resumen Validaciones — formato
     ws = wb["Resumen Validaciones"]
-    _col_colors = ['5B9BD5', 'A5A5A5', '70AD47', '4472C4']  # Validación, Descripción, Errores, Archivo
-    for ci, color in enumerate(_col_colors, 1):
+    _col_colors_rv = ['4472C4', '5B9BD5', 'A5A5A5', '70AD47', '4472C4', '5B9BD5', 'A5A5A5']
+    for ci, color in enumerate(_col_colors_rv, 1):
         cell = ws.cell(row=1, column=ci)
         cell.fill = PatternFill(start_color=color, fill_type="solid")
         cell.font = Font(name="Tahoma", size=10, bold=True, color="FFFFFFFF")
+        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
     for r in range(2, len(df_resumen_val) + 2):
-        errores = ws.cell(row=r, column=3).value or 0
-        color_fila = "FFC7CE" if errores > 0 else "E2EFDA"
-        font_err   = Font(name="Tahoma", size=10, bold=True, color="9C002A" if errores > 0 else "375623")
-        for ci in range(1, 5):
+        for ci in range(1, 8):
             cell = ws.cell(row=r, column=ci)
-            cell.font = font_err if ci == 3 else Font(name="Tahoma", size=10)
-        ws.cell(row=r, column=3).fill = PatternFill(start_color=color_fila, fill_type="solid")
-    ws.column_dimensions['A'].width = 30
-    ws.column_dimensions['B'].width = 62
-    ws.column_dimensions['C'].width = 12
-    ws.column_dimensions['D'].width = 16
+            cell.font = Font(name="Tahoma", size=10)
+            cell.alignment = Alignment(vertical="center", wrap_text=True)
+    ws.column_dimensions['A'].width = 26
+    ws.column_dimensions['B'].width = 28
+    ws.column_dimensions['C'].width = 45
+    ws.column_dimensions['D'].width = 18
+    ws.column_dimensions['E'].width = 24
+    ws.column_dimensions['F'].width = 50
+    ws.column_dimensions['G'].width = 40
 
     # Mover "Resumen Validaciones" a la segunda posición (tras Hoja1)
     idx_actual = wb.sheetnames.index("Resumen Validaciones")
