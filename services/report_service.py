@@ -354,12 +354,12 @@ def execute_report(
     _n_nc = len(hoja6[(hoja6['Diferencia'] > 0) | (hoja6['Factura encontrada'] == False)])
 
     df_resumen_val = pd.DataFrame([
-        {'Validación': 'Datos Incompletos',        'Descripción': 'Facturas con Responsable, Margen, OPCI o Producto vacío o guion', 'Errores': _n_incompletos},
-        {'Validación': 'Monto ERP ≠ Excel',         'Descripción': 'Diferencia en monto o tipo de cambio entre ERP y SharePoint',    'Errores': _n_monto_erp},
-        {'Validación': 'Responsable B24 vs Excel',  'Descripción': 'Responsables distintos entre Bitrix24 y SharePoint',              'Errores': _n_responsable},
-        {'Validación': 'OPCI Responsable Único',    'Descripción': 'OPCI con múltiples responsables asignados',                       'Errores': _n_opci},
-        {'Validación': 'Servicios - Resp. Fredy',   'Descripción': 'Servicios sin Fredy Huaman R. como responsable',                  'Errores': _n_fredy},
-        {'Validación': 'Nota Crédito Compensada',   'Descripción': 'Notas crédito con diferencia pendiente o factura no encontrada',  'Errores': _n_nc},
+        {'Validación': 'Datos Incompletos',        'Descripción': 'Facturas con Responsable, Margen, OPCI o Producto vacío o guion', 'Errores': _n_incompletos, 'Archivo': 'Facturación'},
+        {'Validación': 'Monto ERP ≠ Excel',         'Descripción': 'Diferencia en monto o tipo de cambio entre ERP y SharePoint',    'Errores': _n_monto_erp,   'Archivo': 'Facturación'},
+        {'Validación': 'Responsable B24 vs Excel',  'Descripción': 'Responsables distintos entre Bitrix24 y SharePoint',              'Errores': _n_responsable, 'Archivo': 'Logística'},
+        {'Validación': 'OPCI Responsable Único',    'Descripción': 'OPCI con múltiples responsables asignados',                       'Errores': _n_opci,        'Archivo': 'Logística'},
+        {'Validación': 'Servicios - Resp. Fredy',   'Descripción': 'Servicios sin Fredy Huaman R. como responsable',                  'Errores': _n_fredy,       'Archivo': 'Logística'},
+        {'Validación': 'Nota Crédito Compensada',   'Descripción': 'Notas crédito con diferencia pendiente o factura no encontrada',  'Errores': _n_nc,          'Archivo': 'Facturación'},
     ])
 
     with pd.ExcelWriter('reporte.xlsx', engine='openpyxl') as writer:
@@ -668,7 +668,7 @@ def execute_report(
 
     # Hoja Resumen Validaciones — formato
     ws = wb["Resumen Validaciones"]
-    _col_colors = ['5B9BD5', 'A5A5A5', '70AD47']  # Validación, Descripción, Errores
+    _col_colors = ['5B9BD5', 'A5A5A5', '70AD47', '4472C4']  # Validación, Descripción, Errores, Archivo
     for ci, color in enumerate(_col_colors, 1):
         cell = ws.cell(row=1, column=ci)
         cell.fill = PatternFill(start_color=color, fill_type="solid")
@@ -677,13 +677,14 @@ def execute_report(
         errores = ws.cell(row=r, column=3).value or 0
         color_fila = "FFC7CE" if errores > 0 else "E2EFDA"
         font_err   = Font(name="Tahoma", size=10, bold=True, color="9C002A" if errores > 0 else "375623")
-        for ci in range(1, 4):
+        for ci in range(1, 5):
             cell = ws.cell(row=r, column=ci)
             cell.font = font_err if ci == 3 else Font(name="Tahoma", size=10)
         ws.cell(row=r, column=3).fill = PatternFill(start_color=color_fila, fill_type="solid")
     ws.column_dimensions['A'].width = 30
     ws.column_dimensions['B'].width = 62
     ws.column_dimensions['C'].width = 12
+    ws.column_dimensions['D'].width = 16
 
     # Mover "Resumen Validaciones" a la segunda posición (tras Hoja1)
     idx_actual = wb.sheetnames.index("Resumen Validaciones")
