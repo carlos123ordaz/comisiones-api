@@ -326,14 +326,17 @@ def execute_report(
              'Observaciones', 'Periodo', 'EstadoPago-Vendedor', 'Lider 1', 'Lider 2', 'EstadoPago-Lideres', 'Umbral']]
 
     # Hoja Datos Incompletos: filas donde campos clave son nulos o guion
-    _cols_validar = ['Responsable 1', 'Responsable 2', 'UBruta', 'Cotizacion #', 'Producto CRM']
+    _cols_validar = ['Responsable 1', 'Responsable 2',
+                     'UBruta', 'Cotizacion #', 'Producto CRM']
+
     def _campo_incompleto(val):
         if val is None:
             return True
         s = str(val).strip()
         return s == '' or s == '-' or s.lower() == 'nan'
 
-    _mask = df[_cols_validar].apply(lambda col: col.map(_campo_incompleto)).any(axis=1)
+    _mask = df[_cols_validar].apply(
+        lambda col: col.map(_campo_incompleto)).any(axis=1)
     df_incompletos = df[_mask].drop(columns=['Unidad de Negocio']).copy()
     df_incompletos['Campos Incompletos'] = df[_cols_validar].apply(
         lambda col: col.map(_campo_incompleto)
@@ -351,7 +354,8 @@ def execute_report(
         (df_servicios['Responsable 1'] != 'Fredy Huaman R.') |
         (df_servicios['Responsable 2'] != 'Fredy Huaman R.')
     ])
-    _n_nc = len(hoja6[(hoja6['Diferencia'] > 0) | (hoja6['Factura encontrada'] == False)])
+    _n_nc = len(hoja6[(hoja6['Diferencia'] > 0) | (
+        hoja6['Factura encontrada'] == False)])
 
     df_resumen_val = pd.DataFrame([
         {
@@ -394,7 +398,7 @@ def execute_report(
             'Hoja del Reporte': 'Servicios Responsable Fredy',
             'Validación': 'Responsable de servicio incorrecto',
             '¿Qué significa?': 'El servicio fue asignado a un responsable distinto al establecido para este tipo de productos.',
-            '¿Quién corrige?': 'Logística',
+            '¿Quién corrige?': 'Marco Reyna',
             '¿Dónde se corrige?': 'Invoice y Ventas_OP',
             'Acción del Asistente Comercial': 'Solicitar la corrección de la asignación y volver a ejecutar el programa.',
             'Comentarios': 'Es posible que sea necesario generar otro número de OPCI.',
@@ -435,8 +439,10 @@ def execute_report(
         df_conflictos.to_excel(writer, sheet_name='Hoja4', index=False)
         df_servicios.to_excel(writer, sheet_name='Hoja5', index=False)
         hoja6.to_excel(writer, sheet_name='Hoja6', index=False)
-        df_incompletos.to_excel(writer, sheet_name='Datos Incompletos', index=False)
-        df_resumen_val.to_excel(writer, sheet_name='Resumen Validaciones', index=False)
+        df_incompletos.to_excel(
+            writer, sheet_name='Datos Incompletos', index=False)
+        df_resumen_val.to_excel(
+            writer, sheet_name='Resumen Validaciones', index=False)
 
     nombre_archivo = "reporte.xlsx"
     wb = load_workbook(nombre_archivo)
@@ -717,13 +723,16 @@ def execute_report(
         cell.fill = PatternFill(start_color="FF4500", fill_type="solid")
         cell.font = Font(name="Tahoma", size=9, bold=True, color="FFFFFFFF")
     # Marcar en amarillo las celdas de cada fila que están incompletas
-    _col_indices = {name: idx + 1 for idx, name in enumerate(df_incompletos.columns) if name in _cols_validar}
+    _col_indices = {name: idx + 1 for idx,
+                    name in enumerate(df_incompletos.columns) if name in _cols_validar}
     for r in range(2, num_filas_inc + 2):
         for col_name, col_idx in _col_indices.items():
             cell = ws.cell(row=r, column=col_idx)
             if _campo_incompleto(cell.value):
-                cell.fill = PatternFill(start_color="FFC7CE", fill_type="solid")
-                cell.font = Font(name="Tahoma", size=9, color="9C002A", bold=True)
+                cell.fill = PatternFill(
+                    start_color="FFC7CE", fill_type="solid")
+                cell.font = Font(name="Tahoma", size=9,
+                                 color="9C002A", bold=True)
             else:
                 cell.font = Font(name="Tahoma", size=9)
         # Resto de celdas
@@ -734,12 +743,14 @@ def execute_report(
 
     # Hoja Resumen Validaciones — formato
     ws = wb["Resumen Validaciones"]
-    _col_colors_rv = ['4472C4', '5B9BD5', 'A5A5A5', '70AD47', '4472C4', '5B9BD5', 'A5A5A5']
+    _col_colors_rv = ['4472C4', '5B9BD5', 'A5A5A5',
+                      '70AD47', '4472C4', '5B9BD5', 'A5A5A5']
     for ci, color in enumerate(_col_colors_rv, 1):
         cell = ws.cell(row=1, column=ci)
         cell.fill = PatternFill(start_color=color, fill_type="solid")
         cell.font = Font(name="Tahoma", size=10, bold=True, color="FFFFFFFF")
-        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        cell.alignment = Alignment(
+            horizontal="center", vertical="center", wrap_text=True)
     for r in range(2, len(df_resumen_val) + 2):
         for ci in range(1, 8):
             cell = ws.cell(row=r, column=ci)
@@ -913,11 +924,12 @@ def execute_report(
                 pivot_q[m] = 0.0
 
         pivot_q['Total General'] = pivot_q[[m for m in q_meses]].sum(axis=1)
-        pivot_q['Umbral Mensual'] = pivot_q['Responsable 1'].map(umbrales).fillna(0)
+        pivot_q['Umbral Mensual'] = pivot_q['Responsable 1'].map(
+            umbrales).fillna(0)
         pivot_q['Umbral Trimestral'] = pivot_q['Umbral Mensual'] * 3
         pivot_q['Paso'] = pivot_q.apply(
             lambda row: row['Total General'] > row['Umbral Trimestral'] or
-                        any(row[m] > row['Umbral Mensual'] for m in q_meses),
+            any(row[m] > row['Umbral Mensual'] for m in q_meses),
             axis=1
         )
 
@@ -930,12 +942,14 @@ def execute_report(
 
         # ── Tabla 1: montos por mes ───────────────────────────────────────────
         T1_ROW = 3
-        t1_headers = ['Vendedor'] + [NOMBRES_MESES[m] for m in q_meses] + ['Total General']
+        t1_headers = ['Vendedor'] + [NOMBRES_MESES[m]
+                                     for m in q_meses] + ['Total General']
         for ci, hdr in enumerate(t1_headers, 1):
             cell = ws.cell(row=T1_ROW, column=ci)
             cell.value = hdr
             cell.fill = PatternFill(start_color='5B9BD5', fill_type='solid')
-            cell.font = Font(name='Tahoma', size=9, bold=True, color='FFFFFFFF')
+            cell.font = Font(name='Tahoma', size=9,
+                             bold=True, color='FFFFFFFF')
 
         for ri, (_, row) in enumerate(pivot_q.iterrows(), 1):
             r = T1_ROW + ri
@@ -959,13 +973,15 @@ def execute_report(
         sub.value = '¿Pasó el umbral?'
         sub.font = Font(name='Tahoma', size=9, bold=True, italic=True)
 
-        t2_headers = ['Vendedor', 'Umbral Mensual', 'Umbral Trimestral', 'Total', '¿Pasó?']
+        t2_headers = ['Vendedor', 'Umbral Mensual',
+                      'Umbral Trimestral', 'Total', '¿Pasó?']
         t2_colors = ['A5A5A5', 'FFC000', 'FFC000', '5B9BD5', '70AD47']
         for ci, (hdr, color) in enumerate(zip(t2_headers, t2_colors), 1):
             cell = ws.cell(row=T2_ROW, column=ci)
             cell.value = hdr
             cell.fill = PatternFill(start_color=color, fill_type='solid')
-            cell.font = Font(name='Tahoma', size=9, bold=True, color='FFFFFFFF')
+            cell.font = Font(name='Tahoma', size=9,
+                             bold=True, color='FFFFFFFF')
 
         for ri, (_, row) in enumerate(pivot_q.iterrows(), 1):
             r = T2_ROW + ri
@@ -987,11 +1003,13 @@ def execute_report(
             paso_cell.value = 'SI' if paso else 'NO'
             paso_cell.fill = PatternFill(
                 start_color='70AD47' if paso else 'FF4040', fill_type='solid')
-            paso_cell.font = Font(name='Tahoma', size=9, bold=True, color='FFFFFFFF')
+            paso_cell.font = Font(name='Tahoma', size=9,
+                                  bold=True, color='FFFFFFFF')
 
         # Ajustar anchos
         for col in ws.columns:
-            max_len = max((len(str(cell.value or '')) for cell in col), default=10)
+            max_len = max((len(str(cell.value or ''))
+                          for cell in col), default=10)
             ws.column_dimensions[col[0].column_letter].width = max_len + 4
 
     mes_actual = pd.Timestamp.now().month
@@ -1003,7 +1021,8 @@ def execute_report(
     ]
     for sheet_name, q_label, q_meses in trimestres_a_generar:
         if q_meses[0] <= mes_actual:
-            _escribir_hoja_trimestre(wb2, sheet_name, q_label, q_meses, endress)
+            _escribir_hoja_trimestre(
+                wb2, sheet_name, q_label, q_meses, endress)
     # ─────────────────────────────────────────────────────────────────────────
 
     wb2.save(nombre_archivo)
@@ -1184,15 +1203,19 @@ def execute_report(
             responsables = doc.get('responsables', [])
 
             # Responsable 1 (col D=4)
-            r1_nombre = responsables[0]['nombre'] if len(responsables) >= 1 else None
-            r1_comision = responsables[0]['comision'] if len(responsables) >= 1 else 0
+            r1_nombre = responsables[0]['nombre'] if len(
+                responsables) >= 1 else None
+            r1_comision = responsables[0]['comision'] if len(
+                responsables) >= 1 else 0
             c = ws_hoja1.cell(row=fila, column=4)
             c.value = r1_nombre
             c.font = font_celda
 
             # Responsable 2 (col E=5)
-            r2_nombre = responsables[1]['nombre'] if len(responsables) >= 2 else None
-            r2_comision = responsables[1]['comision'] if len(responsables) >= 2 else 0
+            r2_nombre = responsables[1]['nombre'] if len(
+                responsables) >= 2 else None
+            r2_comision = responsables[1]['comision'] if len(
+                responsables) >= 2 else 0
             c = ws_hoja1.cell(row=fila, column=5)
             c.value = r2_nombre
             c.font = font_celda
@@ -1207,7 +1230,8 @@ def execute_report(
             c_ae.font = font_celda
 
         wb_excel.save(nombre_archivo)
-        print(f"✅ reporte.xlsx actualizado con {len(facturas_manuales)} factura(s) editada(s) manualmente")
+        print(
+            f"✅ reporte.xlsx actualizado con {len(facturas_manuales)} factura(s) editada(s) manualmente")
 
     print(f"\n{'=' * 80}")
     print(f"✅ DATOS CARGADOS A MONGODB")
