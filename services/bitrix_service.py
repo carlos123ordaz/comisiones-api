@@ -28,7 +28,8 @@ def _fetch_all_users() -> dict:
     users = {}
     start = 0
     while True:
-        resp = requests.get(f"{BITRIX_WEBHOOK}/user.get", params={'start': start}, timeout=30)
+        resp = requests.get(f"{BITRIX_WEBHOOK}/user.get",
+                            params={'start': start}, timeout=30)
         resp.raise_for_status()
         data = resp.json()
         for u in data.get('result', []):
@@ -63,7 +64,7 @@ def fetch_invoices_from_bitrix() -> pd.DataFrame:
                 ('select[]', 'ufCrm_650A1F77369DA'),
                 ('select[]', 'ufCrm_650A1F760FCC5'),
                 ('select[]', 'begindate'),
-                ('filter[>=begindate]', '2025-07-01'),
+                ('filter[>=begindate]', '2025-06-01'),
                 ('start', start),
             ],
             timeout=30,
@@ -79,9 +80,11 @@ def fetch_invoices_from_bitrix() -> pd.DataFrame:
             r2_name = users.get(int(r2_id), '') if r2_id else ''
 
             un_ids = item.get('ufCrm_650A1F760FCC5') or []
-            un_str = ', '.join(filter(None, [UN_MAP.get(str(uid), '') for uid in un_ids]))
+            un_str = ', '.join(
+                filter(None, [UN_MAP.get(str(uid), '') for uid in un_ids]))
 
-            stage = STAGE_MAP.get(item.get('stageId', ''), item.get('stageId', ''))
+            stage = STAGE_MAP.get(item.get('stageId', ''),
+                                  item.get('stageId', ''))
 
             rows.append({
                 'ID':                          item.get('id'),
