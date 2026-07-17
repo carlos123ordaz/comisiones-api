@@ -412,7 +412,7 @@ def execute_report(
             'Hoja del Reporte': 'Resumen',
             'Validación': 'Producto CRM vacío o incorrecto',
             '¿Qué significa?': 'El Producto CRM no existe o no coincide con la información comercial del pedido.',
-            '¿Quién corrige?': 'Logística',
+            '¿Quién corrige?': 'Logística Y Facturación',
             '¿Dónde se corrige?': 'Ventas_OP y/o Facturación_OP',
             'Acción del Asistente Comercial': 'Solicitar la actualización del Producto CRM y volver a ejecutar el programa.',
             'Comentarios': '',
