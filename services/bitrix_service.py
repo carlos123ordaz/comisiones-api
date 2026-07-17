@@ -64,7 +64,7 @@ def fetch_invoices_from_bitrix() -> pd.DataFrame:
                 ('select[]', 'ufCrm_650A1F77369DA'),
                 ('select[]', 'ufCrm_650A1F760FCC5'),
                 ('select[]', 'begindate'),
-                ('filter[>=begindate]', '2025-06-01'),
+                ('filter[>=begindate]', '2025-03-01'),
                 ('start', start),
             ],
             timeout=30,
