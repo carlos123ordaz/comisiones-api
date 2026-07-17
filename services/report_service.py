@@ -617,10 +617,10 @@ def execute_report(
         ws.column_dimensions[col[0].column_letter].width = max(
             len(str(c.value or "")) for c in col) + 2
     for r in range(2, ws.max_row + 1):
-        f_val = ws.cell(row=r, column=6).value
-        g_val = ws.cell(row=r, column=7).value
-        h_val = ws.cell(row=r, column=8).value
-        i_val = ws.cell(row=r, column=9).value
+        f_val = str(ws.cell(row=r, column=6).value or '').strip().lower()
+        g_val = str(ws.cell(row=r, column=7).value or '').strip().lower()
+        h_val = str(ws.cell(row=r, column=8).value or '').strip().lower()
+        i_val = str(ws.cell(row=r, column=9).value or '').strip().lower()
         if h_val == f_val and i_val == g_val:
             ws.row_dimensions[r].hidden = True
 
