@@ -318,9 +318,16 @@ def execute_report(
     hoja6 = nc[['AÑO', 'MES', 'Estado', 'Número', 'Monto Total', 'Producto CRM', 'Cotizacion #', 'Responsable 1',
                 'Responsable 2', 'Lider 1', 'Factura Relacionada', 'Total_Factura', 'Diferencia', 'Factura encontrada']]
 
+    # Columnas auxiliares para fórmulas Excel (se ocultarán en el reporte)
+    df['_MontoSinIGV'] = df['MontoTotal_SinIGV_x']
+    df['_Moneda'] = df['Moneda_x']
+    df['_CdTD'] = df['Cd_TD']
+    df['_ValorNeto'] = df['ValorNeto']
+
     df = df[['OK', 'AÑO', 'MES', 'Responsable 1', 'Responsable 2', 'Unidad de Negocio', 'Fecha', 'Estado', 'Número', 'Monto Total', 'Producto CRM', 'UBruta',
             'Nombre Empresa', 'Subject', 'Codigos', 'Cotizacion #', 'Proviene EPC/OEM/Canal Deal?', 'T/C de la Factura', 'Monto Actualizado', 'Diferencia', 'Notas',
-             'Observaciones', 'Periodo', 'EstadoPago-Vendedor', 'Lider 1', 'Lider 2', 'EstadoPago-Lideres', 'Umbral']]
+             'Observaciones', 'Periodo', 'EstadoPago-Vendedor', 'Lider 1', 'Lider 2', 'EstadoPago-Lideres', 'Umbral',
+             '_MontoSinIGV', '_Moneda', '_CdTD', '_ValorNeto']]
 
     # Hoja Datos Incompletos: filas donde campos clave son nulos o guion
     _cols_validar = ['Responsable 1', 'Responsable 2',
@@ -450,7 +457,17 @@ def execute_report(
         for cell in row:
             cell.font = Font(name="Tahoma", size=9)
 
+    # Fórmulas dinámicas: Monto Total (J), Monto Actualizado (S), Diferencia (T)
+    # Columnas auxiliares: AC=_MontoSinIGV, AD=_Moneda, AE=_CdTD, AF=_ValorNeto
     for i in range(2, num_filas + 2):
+        # Monto Total: lógica de conversión por moneda y tipo de documento
+        ws[f'J{i}'] = (
+            f'=IF(ISNUMBER(SEARCH("Nota Crédito",H{i})),-ABS(AF{i}),'
+            f'IF(OR(H{i}="",ISBLANK(H{i})),AF{i},'
+            f'IF(AD{i}="USD",AC{i},IF(R{i}=0,AC{i},AC{i}/R{i}))))'
+        )
+        # Monto Actualizado: ajuste por umbral de utilidad bruta
+        ws[f'S{i}'] = f'=IF(L{i}>=0.22,J{i},J{i}*L{i}/0.22)'
         ws[f'T{i}'] = f'=IF(L{i}="",0,S{i}-J{i})'
 
     items = [
@@ -487,6 +504,8 @@ def execute_report(
         cell.font = Font(color="375623")
         cell = ws[f"AB{i}"]
         cell.number_format = "0.00%"
+        cell = ws[f"J{i}"]
+        cell.number_format = "0.00"
         cell = ws[f"S{i}"]
         cell.number_format = "0.00"
         cell = ws[f"T{i}"]
@@ -555,6 +574,10 @@ def execute_report(
     ws.column_dimensions['T'].width = 14
     ws.column_dimensions['S'].width = 23
     ws.column_dimensions['N'].width = 44
+    # Ocultar columnas auxiliares de fórmulas
+    for col_letter in ['AC', 'AD', 'AE', 'AF']:
+        ws.column_dimensions[col_letter].hidden = True
+
     ws.auto_filter.ref = ws.dimensions
 
     # Hoja N° 2 — Monto ERP = Excel
@@ -1113,7 +1136,11 @@ def execute_report(
         "Producto": "producto",
         "Comisiona": "comisiona",
         "Comisión Total": "comision_total",
-        "responsables": "responsables"  # Nuevo campo
+        "responsables": "responsables",  # Nuevo campo
+        "_MontoSinIGV": "monto_sin_igv",
+        "_Moneda": "moneda",
+        "_CdTD": "cd_td",
+        "_ValorNeto": "valor_neto",
     }
 
     # Renombrar columnas
@@ -1127,7 +1154,8 @@ def execute_report(
         "tipo_cambio_factura", "monto_actualizado", "diferencia", "notas",
         "observaciones", "periodo", "estado_pago_vendedor", "lider_1",
         "lider_2", "estado_pago_lideres", "umbral", "producto", "comisiona",
-        "comision_total", "responsables"
+        "comision_total", "responsables",
+        "monto_sin_igv", "moneda", "cd_td", "valor_neto"
     ]
 
     df = df[columnas_a_insertar]

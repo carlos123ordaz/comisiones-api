@@ -377,6 +377,10 @@ async def get_facturas_by_user(name_user: str = Query(..., description="Nombre d
                 'Comisiona': f.get('comisiona', True),
                 'Comisión 1': r1.get('comision', 0),
                 'Comisión 2': r2.get('comision', 0),
+                '_MontoSinIGV': f.get('monto_sin_igv', 0),
+                '_Moneda': f.get('moneda', ''),
+                '_CdTD': f.get('cd_td', ''),
+                '_ValorNeto': f.get('valor_neto', 0),
             })
 
         df = pd.DataFrame(rows)
@@ -389,7 +393,8 @@ async def get_facturas_by_user(name_user: str = Query(..., description="Nombre d
             'Cotizacion #', 'Proviene EPC/OEM/Canal Deal?', 'T/C de la Factura',
             'Monto Actualizado', 'Diferencia', 'Notas', 'Observaciones',
             'Periodo', 'EstadoPago-Vendedor', 'Lider 1', 'Lider 2',
-            'EstadoPago-Lideres', 'Umbral', 'Comisiona', 'Comisión 1', 'Comisión 2'
+            'EstadoPago-Lideres', 'Umbral', 'Comisiona', 'Comisión 1', 'Comisión 2',
+            '_MontoSinIGV', '_Moneda', '_CdTD', '_ValorNeto'
         ]
         df = df[columnas]
 
@@ -432,8 +437,20 @@ async def get_facturas_by_user(name_user: str = Query(..., description="Nombre d
                 cell.fill = PatternFill(start_color=color, fill_type="solid")
                 cell.font = Font(name="Tahoma", size=9, bold=True, color="FFFFFFFF")
 
-        # Formatos numéricos
+        # Fórmulas dinámicas y formatos numéricos
+        # Columnas auxiliares: AF=_MontoSinIGV, AG=_Moneda, AH=_CdTD, AI=_ValorNeto
         for i in range(2, num_filas + 2):
+            # Monto Total (J): fórmula dinámica con tipo de cambio
+            ws[f'J{i}'] = (
+                f'=IF(ISNUMBER(SEARCH("Nota Crédito",H{i})),-ABS(AI{i}),'
+                f'IF(OR(H{i}="",ISBLANK(H{i})),AI{i},'
+                f'IF(AG{i}="USD",AF{i},IF(R{i}=0,AF{i},AF{i}/R{i}))))'
+            )
+            ws[f'J{i}'].number_format = "0.00"
+            # Monto Actualizado (S): fórmula dinámica
+            ws[f'S{i}'] = f'=IF(L{i}>=0.22,J{i},J{i}*L{i}/0.22)'
+            ws[f'S{i}'].number_format = "0.00"
+
             cell = ws.cell(row=i, column=12)  # UBruta (L)
             if (cell.value or 0) >= 0.22:
                 cell.number_format = '">"0%'
@@ -442,11 +459,14 @@ async def get_facturas_by_user(name_user: str = Query(..., description="Nombre d
             cell.fill = PatternFill(start_color="A9D08E", fill_type="solid")
             cell.font = Font(color="375623")
 
-            ws.cell(row=i, column=19).number_format = "0.00"  # Monto Actualizado (S)
             ws.cell(row=i, column=18).number_format = "0.00"  # T/C (R)
             ws.cell(row=i, column=7).number_format = 'DD/MM/YYYY'  # Fecha (G)
             ws.cell(row=i, column=30).number_format = "0.00"  # Comisión 1
             ws.cell(row=i, column=31).number_format = "0.00"  # Comisión 2
+
+        # Ocultar columnas auxiliares
+        for col_letter in ['AF', 'AG', 'AH', 'AI']:
+            ws.column_dimensions[col_letter].hidden = True
 
         # Formato condicional: montos negativos en rojo
         ws.conditional_formatting.add(
