@@ -437,6 +437,9 @@ def execute_report(
         },
     ])
 
+    # Preservar datos auxiliares para fórmulas y MongoDB (se usan después del pd.read_excel)
+    _df_aux = df[_cols_aux].reset_index(drop=True)
+
     with pd.ExcelWriter('reporte.xlsx', engine='openpyxl') as writer:
         df[_cols_reporte].to_excel(writer, sheet_name='Hoja1', index=False)
         one.to_excel(writer, sheet_name='Hoja2', index=False)
@@ -899,11 +902,12 @@ def execute_report(
     for col_num, header in [(33, '_MontoSinIGV'), (34, '_Moneda'), (35, '_ValorNeto')]:
         ws2.cell(row=1, column=col_num).value = header
 
-    for idx, row in df.iterrows():
-        r = idx + 2
-        ws2.cell(row=r, column=33).value = row['_MontoSinIGV']
-        ws2.cell(row=r, column=34).value = row['_Moneda']
-        ws2.cell(row=r, column=35).value = row['_ValorNeto']
+    num_filas_aux = len(_df_aux)
+    for i in range(num_filas_aux):
+        r = i + 2
+        ws2.cell(row=r, column=33).value = _df_aux.iloc[i]['_MontoSinIGV']
+        ws2.cell(row=r, column=34).value = _df_aux.iloc[i]['_Moneda']
+        ws2.cell(row=r, column=35).value = _df_aux.iloc[i]['_ValorNeto']
         # Monto Total (J): fórmula dinámica con tipo de cambio
         ws2[f'J{r}'] = (
             f'=IF(ISNUMBER(SEARCH("Nota Cr\u00e9dito",H{r})),-ABS(AI{r}),'
@@ -1112,6 +1116,11 @@ def execute_report(
 
     # Aplicar la función para crear el array de responsables
     df['responsables'] = df.apply(crear_array_responsables, axis=1)
+
+    # Reincorporar datos auxiliares para MongoDB (alinear con el filtro de Responsable 1)
+    _df_aux_filtered = _df_aux.loc[df.index]
+    for col in _cols_aux:
+        df[col] = _df_aux_filtered[col].values
 
     # ============================================================================
     # MAPEO DE COLUMNAS PARA MONGODB
