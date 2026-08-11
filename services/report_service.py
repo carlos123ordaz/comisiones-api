@@ -324,10 +324,11 @@ def execute_report(
     df['_CdTD'] = df['Cd_TD']
     df['_ValorNeto'] = df['ValorNeto']
 
-    df = df[['OK', 'AÑO', 'MES', 'Responsable 1', 'Responsable 2', 'Unidad de Negocio', 'Fecha', 'Estado', 'Número', 'Monto Total', 'Producto CRM', 'UBruta',
+    _cols_reporte = ['OK', 'AÑO', 'MES', 'Responsable 1', 'Responsable 2', 'Unidad de Negocio', 'Fecha', 'Estado', 'Número', 'Monto Total', 'Producto CRM', 'UBruta',
             'Nombre Empresa', 'Subject', 'Codigos', 'Cotizacion #', 'Proviene EPC/OEM/Canal Deal?', 'T/C de la Factura', 'Monto Actualizado', 'Diferencia', 'Notas',
-             'Observaciones', 'Periodo', 'EstadoPago-Vendedor', 'Lider 1', 'Lider 2', 'EstadoPago-Lideres', 'Umbral',
-             '_MontoSinIGV', '_Moneda', '_CdTD', '_ValorNeto']]
+             'Observaciones', 'Periodo', 'EstadoPago-Vendedor', 'Lider 1', 'Lider 2', 'EstadoPago-Lideres', 'Umbral']
+    _cols_aux = ['_MontoSinIGV', '_Moneda', '_CdTD', '_ValorNeto']
+    df = df[_cols_reporte + _cols_aux]
 
     # Hoja Datos Incompletos: filas donde campos clave son nulos o guion
     _cols_validar = ['Responsable 1', 'Responsable 2',
@@ -341,7 +342,7 @@ def execute_report(
 
     _mask = df[_cols_validar].apply(
         lambda col: col.map(_campo_incompleto)).any(axis=1)
-    df_incompletos = df[_mask].drop(columns=['Unidad de Negocio']).copy()
+    df_incompletos = df[_mask].drop(columns=['Unidad de Negocio'] + _cols_aux).copy()
     df_incompletos['Campos Incompletos'] = df[_cols_validar].apply(
         lambda col: col.map(_campo_incompleto)
     ).apply(lambda row: ', '.join(_cols_validar[i] for i, v in enumerate(row) if v), axis=1)
@@ -437,7 +438,7 @@ def execute_report(
     ])
 
     with pd.ExcelWriter('reporte.xlsx', engine='openpyxl') as writer:
-        df.to_excel(writer, sheet_name='Hoja1', index=False)
+        df[_cols_reporte].to_excel(writer, sheet_name='Hoja1', index=False)
         one.to_excel(writer, sheet_name='Hoja2', index=False)
         df_c1.to_excel(writer, sheet_name='Hoja3', index=False)
         df_conflictos.to_excel(writer, sheet_name='Hoja4', index=False)
@@ -457,17 +458,7 @@ def execute_report(
         for cell in row:
             cell.font = Font(name="Tahoma", size=9)
 
-    # Fórmulas dinámicas: Monto Total (J), Monto Actualizado (S), Diferencia (T)
-    # Columnas auxiliares: AC=_MontoSinIGV, AD=_Moneda, AE=_CdTD, AF=_ValorNeto
     for i in range(2, num_filas + 2):
-        # Monto Total: lógica de conversión por moneda y tipo de documento
-        ws[f'J{i}'] = (
-            f'=IF(ISNUMBER(SEARCH("Nota Crédito",H{i})),-ABS(AF{i}),'
-            f'IF(OR(H{i}="",ISBLANK(H{i})),AF{i},'
-            f'IF(AD{i}="USD",AC{i},IF(R{i}=0,AC{i},AC{i}/R{i}))))'
-        )
-        # Monto Actualizado: ajuste por umbral de utilidad bruta
-        ws[f'S{i}'] = f'=IF(L{i}>=0.22,J{i},J{i}*L{i}/0.22)'
         ws[f'T{i}'] = f'=IF(L{i}="",0,S{i}-J{i})'
 
     items = [
@@ -574,10 +565,6 @@ def execute_report(
     ws.column_dimensions['T'].width = 14
     ws.column_dimensions['S'].width = 23
     ws.column_dimensions['N'].width = 44
-    # Ocultar columnas auxiliares de fórmulas
-    for col_letter in ['AC', 'AD', 'AE', 'AF']:
-        ws.column_dimensions[col_letter].hidden = True
-
     ws.auto_filter.ref = ws.dimensions
 
     # Hoja N° 2 — Monto ERP = Excel
@@ -906,6 +893,30 @@ def execute_report(
     ws2.column_dimensions['AD'].width = 14
     ws2.column_dimensions['AE'].width = 14
     ws2.column_dimensions['AF'].width = 12
+
+    # ── Columnas auxiliares ocultas + fórmulas dinámicas (Monto Total / Monto Actualizado) ──
+    # AG=_MontoSinIGV, AH=_Moneda, AI=_ValorNeto (col 33, 34, 35)
+    for col_num, header in [(33, '_MontoSinIGV'), (34, '_Moneda'), (35, '_ValorNeto')]:
+        ws2.cell(row=1, column=col_num).value = header
+
+    for idx, row in df.iterrows():
+        r = idx + 2
+        ws2.cell(row=r, column=33).value = row['_MontoSinIGV']
+        ws2.cell(row=r, column=34).value = row['_Moneda']
+        ws2.cell(row=r, column=35).value = row['_ValorNeto']
+        # Monto Total (J): fórmula dinámica con tipo de cambio
+        ws2[f'J{r}'] = (
+            f'=IF(ISNUMBER(SEARCH("Nota Cr\u00e9dito",H{r})),-ABS(AI{r}),'
+            f'IF(OR(H{r}="",ISBLANK(H{r})),AI{r},'
+            f'IF(AH{r}="USD",AG{r},IF(R{r}=0,AG{r},AG{r}/R{r}))))'
+        )
+        ws2[f'J{r}'].number_format = "0.00"
+        # Monto Actualizado (S): ajuste por umbral de utilidad bruta
+        ws2[f'S{r}'] = f'=IF(L{r}>=0.22,J{r},J{r}*L{r}/0.22)'
+        ws2[f'S{r}'].number_format = "0.00"
+
+    for col_letter in ['AG', 'AH', 'AI']:
+        ws2.column_dimensions[col_letter].hidden = True
 
     # ── HOJAS 7-10: Una hoja por trimestre – Umbral UNAU ─────────────────────
     NOMBRES_MESES = {
