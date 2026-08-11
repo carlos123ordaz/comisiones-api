@@ -835,7 +835,8 @@ def execute_report(
     df['Porcentaje 1'] = 0.7
     df['Porcentaje 2'] = np.where(
         (df['Responsable 2'].str.contains('Paolo', na=False) &
-         (df['Producto CRM'].str.contains('Proy', na=False))),
+         (df['Producto CRM'].str.contains('Proy', na=False)) &
+         (df['Responsable 1'].str.strip() != df['Responsable 2'].str.strip())),
         0.5,
         0.3
     )
@@ -871,7 +872,7 @@ def execute_report(
         ws2[f'AD{r}'] = f'=IF(AC{r},S{r}*0.01*0.7,0)'
         ws2[f'AE{r}'] = (
             f'=IF(AC{r},'
-            f'S{r}*0.01*IF(AND(ISNUMBER(SEARCH("Paolo",E{r})),ISNUMBER(SEARCH("Proy",K{r}))),0.5,0.3),'
+            f'S{r}*0.01*IF(AND(ISNUMBER(SEARCH("Paolo",E{r})),ISNUMBER(SEARCH("Proy",K{r})),D{r}<>E{r}),0.5,0.3),'
             f'0)'
         )
         ws2[f'AD{r}'].font = Font(name='Tahoma', size=9)
