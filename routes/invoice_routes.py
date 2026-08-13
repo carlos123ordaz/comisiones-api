@@ -343,6 +343,11 @@ async def get_facturas_by_user(name_user: str = Query(..., description="Nombre d
             r1 = responsables[0] if len(responsables) >= 1 else {}
             r2 = responsables[1] if len(responsables) >= 2 else {}
 
+            # Si fue consolidado (1 sola entrada con porcentaje 1.0),
+            # el mismo vendedor era R1 y R2 — mostrar en ambas columnas
+            if len(responsables) == 1 and r1.get('porcentaje', 0) == 1.0:
+                r2 = r1
+
             comision_total = f.get('comision_total', 0)
 
             rows.append({
