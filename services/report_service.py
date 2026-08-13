@@ -859,12 +859,14 @@ def execute_report(
     wb2 = load_workbook(nombre_archivo)
     ws2 = wb2['Hoja1']
 
-    # Headers (AC=29, AD=30, AE=31, AF=32)
+    # Headers (AC=29, AD=30, AE=31, AF=32, AG=33, AH=34)
     for col_num, header, color in [
-        (29, 'Comisiona',  'A5A5A5'),
-        (30, 'Comisión 1', '70AD47'),
-        (31, 'Comisión 2', '70AD47'),
-        (32, 'Estado',     'A5A5A5'),
+        (29, 'Comisiona',        'A5A5A5'),
+        (30, 'Comisión 1',       '70AD47'),
+        (31, 'Comisión 2',       '70AD47'),
+        (32, 'Comisión 1 (S/.)', 'ED7D31'),
+        (33, 'Comisión 2 (S/.)', 'ED7D31'),
+        (34, 'Estado',           'A5A5A5'),
     ]:
         cell = ws2.cell(row=1, column=col_num)
         cell.value = header
@@ -887,39 +889,48 @@ def execute_report(
         )
         ws2[f'AD{r}'].font = Font(name='Tahoma', size=9)
         ws2[f'AE{r}'].font = Font(name='Tahoma', size=9)
+        # Comisión 1 y 2 en soles: comisión USD * tipo de cambio (col R)
+        ws2[f'AF{r}'] = f'=AD{r}*R{r}'
+        ws2[f'AG{r}'] = f'=AE{r}*R{r}'
+        ws2[f'AF{r}'].font = Font(name='Tahoma', size=9)
+        ws2[f'AG{r}'].font = Font(name='Tahoma', size=9)
+        ws2[f'AF{r}'].number_format = '0.00'
+        ws2[f'AG{r}'].number_format = '0.00'
         # Estado: valor directo
-        c = ws2.cell(row=r, column=32)
+        c = ws2.cell(row=r, column=34)
         c.value = 'Estándar' if row['Comisiona'] else 'Atípico'
         c.font = Font(name='Tahoma', size=9)
 
     ws2.column_dimensions['AC'].width = 12
     ws2.column_dimensions['AD'].width = 14
     ws2.column_dimensions['AE'].width = 14
-    ws2.column_dimensions['AF'].width = 12
+    ws2.column_dimensions['AF'].width = 18
+    ws2.column_dimensions['AG'].width = 18
+    ws2.column_dimensions['AH'].width = 12
 
     # ── Columnas auxiliares ocultas + fórmulas dinámicas (Monto Total / Monto Actualizado) ──
-    # AG=_MontoSinIGV, AH=_Moneda, AI=_ValorNeto (col 33, 34, 35)
-    for col_num, header in [(33, '_MontoSinIGV'), (34, '_Moneda'), (35, '_ValorNeto')]:
+    # AI=_MontoSinIGV, AJ=_Moneda, AK=_ValorNeto (col 35, 36, 37)
+    for col_num, header in [(35, '_MontoSinIGV'), (36, '_Moneda'), (37, '_ValorNeto')]:
         ws2.cell(row=1, column=col_num).value = header
 
     num_filas_aux = len(_df_aux)
     for i in range(num_filas_aux):
         r = i + 2
-        ws2.cell(row=r, column=33).value = _df_aux.iloc[i]['_MontoSinIGV']
-        ws2.cell(row=r, column=34).value = _df_aux.iloc[i]['_Moneda']
-        ws2.cell(row=r, column=35).value = _df_aux.iloc[i]['_ValorNeto']
+        ws2.cell(row=r, column=35).value = _df_aux.iloc[i]['_MontoSinIGV']
+        ws2.cell(row=r, column=36).value = _df_aux.iloc[i]['_Moneda']
+        ws2.cell(row=r, column=37).value = _df_aux.iloc[i]['_ValorNeto']
         # Monto Total (J): fórmula dinámica con tipo de cambio
         ws2[f'J{r}'] = (
-            f'=IF(ISNUMBER(SEARCH("Nota Cr\u00e9dito",H{r})),-ABS(AI{r}),'
-            f'IF(OR(H{r}="",ISBLANK(H{r})),AI{r},'
-            f'IF(AH{r}="USD",AG{r},IF(R{r}=0,AG{r},AG{r}/R{r}))))'
+            f'=IF(ISNUMBER(SEARCH("Nota Cr\u00e9dito",H{r})),-ABS(AK{r}),'
+            f'IF(OR(H{r}="",ISBLANK(H{r})),AK{r},'
+            f'IF(AJ{r}="USD",AI{r},IF(R{r}=0,AI{r},AI{r}/R{r}))))'
         )
         ws2[f'J{r}'].number_format = "0.00"
         # Monto Actualizado (S): ajuste por umbral de utilidad bruta
         ws2[f'S{r}'] = f'=IF(L{r}>=0.22,J{r},J{r}*L{r}/0.22)'
         ws2[f'S{r}'].number_format = "0.00"
 
-    for col_letter in ['AG', 'AH', 'AI']:
+    for col_letter in ['AI', 'AJ', 'AK']:
         ws2.column_dimensions[col_letter].hidden = True
 
     # ── HOJAS 7-10: Una hoja por trimestre – Umbral UNAU ─────────────────────
