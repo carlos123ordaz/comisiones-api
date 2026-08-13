@@ -176,16 +176,26 @@ def get_comisiones_by_user(name: str, trimestre: int, anio: Optional[int] = None
         {"$match": {"responsables.nombre": name}},
         {"$group": {
             "_id": None,
-            "comision_total": {"$sum": "$responsables.comision"}
+            "comision_total": {"$sum": "$responsables.comision"},
+            "comision_total_soles": {
+                "$sum": {
+                    "$multiply": [
+                        "$responsables.comision",
+                        {"$ifNull": ["$tipo_cambio_factura", 0]}
+                    ]
+                }
+            }
         }}
     ]
 
     resultado = list(invoices_collection.aggregate(pipeline))
     comision_total = resultado[0]["comision_total"] if resultado else 0
+    comision_total_soles = resultado[0]["comision_total_soles"] if resultado else 0
 
     return {
         'responsable': name,
         'comision_total': comision_total,
+        'comision_total_soles': comision_total_soles,
         'trimestre': trimestre,
         'anio': anio
     }
