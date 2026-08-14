@@ -196,7 +196,14 @@ def execute_report(
     df['REF'] = df['Num_Factura'].map(ref_nc)
     df['REF_2'] = df['Num_Factura'].map(ref_umb)
     df['UBrutaCoti'] = np.where(
-        df['Cd_TD'] == '07', df['REF_2'], df['UBrutaCoti'])
+        (df['Cd_TD'] == '07') & df['UBrutaCoti'].notna() & (df['UBrutaCoti'] != 0),
+        df['UBrutaCoti'],
+        np.where(
+            df['Cd_TD'] == '07',
+            df['REF_2'],
+            df['UBrutaCoti']
+        )
+    )
     df['Estado'] = np.where(
         df['REF'].notna() & (df['REF'] != ''),
         'Factura - ' + df['REF'].astype(str),
