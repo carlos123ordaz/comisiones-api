@@ -198,7 +198,8 @@ def execute_report(
     )
 
     df['Monto Total'] = np.where(
-        df['Estado'].str.contains('Nota Crédito', na=False),
+        df['Estado'].str.contains('Nota Crédito', na=False) &
+        (df['Monto Total'].isna() | (df['Monto Total'] == 0)),
         -abs(df['ValorNeto']),
         df['Monto Total']
     )
@@ -325,8 +326,8 @@ def execute_report(
     df['_ValorNeto'] = df['ValorNeto']
 
     _cols_reporte = ['OK', 'AÑO', 'MES', 'Responsable 1', 'Responsable 2', 'Unidad de Negocio', 'Fecha', 'Estado', 'Número', 'Monto Total', 'Producto CRM', 'UBruta',
-            'Nombre Empresa', 'Subject', 'Codigos', 'Cotizacion #', 'Proviene EPC/OEM/Canal Deal?', 'T/C de la Factura', 'Monto Actualizado', 'Diferencia', 'Notas',
-             'Observaciones', 'Periodo', 'EstadoPago-Vendedor', 'Lider 1', 'Lider 2', 'EstadoPago-Lideres', 'Umbral']
+                     'Nombre Empresa', 'Subject', 'Codigos', 'Cotizacion #', 'Proviene EPC/OEM/Canal Deal?', 'T/C de la Factura', 'Monto Actualizado', 'Diferencia', 'Notas',
+                     'Observaciones', 'Periodo', 'EstadoPago-Vendedor', 'Lider 1', 'Lider 2', 'EstadoPago-Lideres', 'Umbral']
     _cols_aux = ['_MontoSinIGV', '_Moneda', '_CdTD', '_ValorNeto']
     df = df[_cols_reporte + _cols_aux]
 
@@ -342,7 +343,8 @@ def execute_report(
 
     _mask = df[_cols_validar].apply(
         lambda col: col.map(_campo_incompleto)).any(axis=1)
-    df_incompletos = df[_mask].drop(columns=['Unidad de Negocio'] + _cols_aux).copy()
+    df_incompletos = df[_mask].drop(
+        columns=['Unidad de Negocio'] + _cols_aux).copy()
     df_incompletos['Campos Incompletos'] = df[_cols_validar].apply(
         lambda col: col.map(_campo_incompleto)
     ).apply(lambda row: ', '.join(_cols_validar[i] for i, v in enumerate(row) if v), axis=1)
