@@ -168,9 +168,13 @@ def execute_report(
         df['MontoTotal_SinIGV_x'] / df['CamMda']
     )
     df['Monto Total'] = np.where(
-        df['Cd_TD'] == '07',
-        -abs(df['Monto Total']),
-        df['Monto Total']
+        (df['Cd_TD'] == '07') & df['Monto'].notna() & (df['Monto'] != 0),
+        -abs(df['Monto']),
+        np.where(
+            df['Cd_TD'] == '07',
+            -abs(df['ValorNeto']),
+            df['Monto Total']
+        )
     )
     df['Estado'] = np.where(df['Cd_TD'] == '07',
                             'Nota Crédito', df['Status_Factura'])
@@ -197,20 +201,6 @@ def execute_report(
         df['Estado']
     )
 
-    df['Monto Total'] = np.where(
-        df['Estado'].str.contains('Nota Crédito', na=False) &
-        (df['Monto Total'].isna() | (df['Monto Total'] == 0)),
-        -abs(df['Monto Total']),
-        df['Monto Total']
-    )
-
-    df['Monto Total'] = np.where(
-        df['Estado'].isna() |
-        (df['Estado'] == '') |
-        (df['Estado'].str.contains('Factura', na=False) & df['Monto Total'].isna()),
-        df['Monto Total'],
-        df['Monto Total']
-    )
 
     r1 = {}
     r2 = {}
