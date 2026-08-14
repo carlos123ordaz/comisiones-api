@@ -168,8 +168,8 @@ def execute_report(
         df['MontoTotal_SinIGV_x'] / df['CamMda']
     )
     df['Monto Total'] = np.where(
-        (df['Cd_TD'] == '07') & df['Monto'].notna() & (df['Monto'] != 0),
-        -abs(df['Monto']),
+        (df['Cd_TD'] == '07') & df['Monto Total'].notna() & (df['Monto Total'] != 0),
+        -abs(df['Monto Total']),
         np.where(
             df['Cd_TD'] == '07',
             -abs(df['ValorNeto']),
