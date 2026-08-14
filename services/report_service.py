@@ -167,8 +167,10 @@ def execute_report(
         df['MontoTotal_SinIGV_x'],
         df['MontoTotal_SinIGV_x'] / df['CamMda']
     )
+    df.to_excel('reporte123.xlsx', index=False)
     df['Monto Total'] = np.where(
-        (df['Cd_TD'] == '07') & df['Monto Total'].notna() & (df['Monto Total'] != 0),
+        (df['Cd_TD'] == '07') & df['Monto Total'].notna() & (
+            df['Monto Total'] != 0),
         -abs(df['Monto Total']),
         np.where(
             df['Cd_TD'] == '07',
@@ -200,7 +202,6 @@ def execute_report(
         'Factura - ' + df['REF'].astype(str),
         df['Estado']
     )
-
 
     r1 = {}
     r2 = {}
@@ -913,7 +914,8 @@ def execute_report(
         ws2.cell(row=r, column=37).value = _df_aux.iloc[i]['_ValorNeto']
         # Monto Total (J): fórmula dinámica con tipo de cambio
         ws2[f'J{r}'] = (
-            f'=IF(ISNUMBER(SEARCH("Nota Cr\u00e9dito",H{r})),-ABS(AK{r}),'
+            f'=IF(ISNUMBER(SEARCH("Nota Cr\u00e9dito",H{r})),'
+            f'-ABS(IF(AI{r}=0,AK{r},IF(AJ{r}="USD",AI{r},IF(R{r}=0,AI{r},AI{r}/R{r})))),'
             f'IF(OR(H{r}="",ISBLANK(H{r})),AK{r},'
             f'IF(AJ{r}="USD",AI{r},IF(R{r}=0,AI{r},AI{r}/R{r}))))'
         )
