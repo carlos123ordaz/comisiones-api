@@ -909,8 +909,8 @@ def execute_report(
     ws2.column_dimensions['AH'].width = 12
 
     # ── Columnas auxiliares ocultas + fórmulas dinámicas (Monto Total / Monto Actualizado) ──
-    # AI=_MontoSinIGV, AJ=_Moneda, AK=_ValorNeto (col 35, 36, 37)
-    for col_num, header in [(35, '_MontoSinIGV'), (36, '_Moneda'), (37, '_ValorNeto')]:
+    # AI=_MontoSinIGV, AJ=_Moneda, AK=_ValorNeto, AL=_CdTD (col 35, 36, 37, 38)
+    for col_num, header in [(35, '_MontoSinIGV'), (36, '_Moneda'), (37, '_ValorNeto'), (38, '_CdTD')]:
         ws2.cell(row=1, column=col_num).value = header
 
     num_filas_aux = len(_df_aux)
@@ -919,9 +919,10 @@ def execute_report(
         ws2.cell(row=r, column=35).value = _df_aux.iloc[i]['_MontoSinIGV']
         ws2.cell(row=r, column=36).value = _df_aux.iloc[i]['_Moneda']
         ws2.cell(row=r, column=37).value = _df_aux.iloc[i]['_ValorNeto']
+        ws2.cell(row=r, column=38).value = _df_aux.iloc[i]['_CdTD']
         # Monto Total (J): fórmula dinámica con tipo de cambio
         ws2[f'J{r}'] = (
-            f'=IF(ISNUMBER(SEARCH("Nota Cr\u00e9dito",H{r})),'
+            f'=IF(AL{r}="07",'
             f'-ABS(IF(AI{r}=0,AK{r},IF(AJ{r}="USD",AI{r},IF(R{r}=0,AI{r},AI{r}/R{r})))),'
             f'IF(OR(H{r}="",ISBLANK(H{r})),AK{r},'
             f'IF(AJ{r}="USD",AI{r},IF(R{r}=0,AI{r},AI{r}/R{r}))))'
@@ -931,7 +932,7 @@ def execute_report(
         ws2[f'S{r}'] = f'=IF(L{r}>=0.22,J{r},J{r}*L{r}/0.22)'
         ws2[f'S{r}'].number_format = "0.00"
 
-    for col_letter in ['AI', 'AJ', 'AK']:
+    for col_letter in ['AI', 'AJ', 'AK', 'AL']:
         ws2.column_dimensions[col_letter].hidden = True
 
     # ── HOJAS 7-10: Una hoja por trimestre – Umbral UNAU ─────────────────────
