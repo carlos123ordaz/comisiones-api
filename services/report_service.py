@@ -200,7 +200,7 @@ def execute_report(
     df['Monto Total'] = np.where(
         df['Estado'].str.contains('Nota Crédito', na=False) &
         (df['Monto Total'].isna() | (df['Monto Total'] == 0)),
-        -abs(df['ValorNeto']),
+        -abs(df['Monto Total']),
         df['Monto Total']
     )
 
@@ -208,7 +208,7 @@ def execute_report(
         df['Estado'].isna() |
         (df['Estado'] == '') |
         (df['Estado'].str.contains('Factura', na=False) & df['Monto Total'].isna()),
-        df['ValorNeto'],
+        df['Monto Total'],
         df['Monto Total']
     )
 
